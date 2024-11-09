@@ -3,6 +3,7 @@ from routeros_api import RouterOsApiPool
 from .schema import RouterCreate
 from api.db.session import get_db
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends
 from .models import RouterInfo
 import logging
@@ -14,16 +15,14 @@ logger = logging.getLogger(__name__)
 # ROUTER_PASSWORD = "password"
 
 
-def add_router_info(router:RouterCreate,db:Session = Depends(get_db)):
-    try:
-        new_class = RouterInfo()
-        db.add(new_class)
-        db.commit()
-        db.refresh(new_class)
-        return True
-    except IntegrityError:
-        db.rollback()
-        return False
+def add_router_info(router:RouterCreate,db:Session):
+    print("type(db)")
+    # try:
+     
+    #     return True
+    # except IntegrityError:
+    #     await db.rollback()
+    #     return False
     
 
 def get_router_connection(ROUTER_IP,ROUTER_USERNAME,ROUTER_PASSWORD):
