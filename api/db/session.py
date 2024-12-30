@@ -35,7 +35,7 @@ from contextlib import asynccontextmanager
 # SQLALCHEMY_DATABASE_URL = "postgresql+asyncpg://postgres:208251001Tito@localhost:5432/postgres"
 # SQLALCHEMY_DATABASE_URL = wifi_billing.db
 
-metadata = MetaData()
+# metadata = MetaData()
 # # Create async engine
 # engine = create_async_engine(SQLALCHEMY_DATABASE_URL,
 #     echo=True,  # Set to False in production
@@ -89,15 +89,15 @@ metadata = MetaData()
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-
-DATABASE_URL = "sqlite:///./test.db"
-
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import Session
+
+Base = declarative_base()
+# DATABASE_URL = "sqlite:///./test.db"
+DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5434/netstat"
+engine = create_engine(
+    DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
     db = SessionLocal()
@@ -105,7 +105,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-Base = declarative_base()
-

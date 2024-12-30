@@ -1,5 +1,5 @@
 from typing import Union
-# from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -7,18 +7,15 @@ from fastapi import FastAPI,Request
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from api.db.session import engine, Base
-from api.payment.routes import router as payment_router
-from api.set_up.routes import router as set_up_router
-from api.users.routes import router as users_router
-template = Jinja2Templates(directory=os.path.join("api", "templates"))
-from fastapi import FastAPI
+from api.routers.payment import router as payment_router
+from api.routers.setup import router as set_up_router
+from api.routers.users import router as users_router
+import asyncpg
 from sqlalchemy.ext.asyncio import AsyncSession
-# from api.db.session import init_db
 from sqlalchemy.ext.declarative import declarative_base
 
-app = FastAPI()
-import asyncpg
-from fastapi import FastAPI
+template = Jinja2Templates(directory=os.path.join("api", "templates"))
+
 
 app = FastAPI()
 
