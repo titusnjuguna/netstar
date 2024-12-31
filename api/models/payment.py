@@ -50,8 +50,8 @@ class Payment(Base):
 
 class Transactions(Base):
     id = Column(Integer,primary_key=True,index=True)
-    phone
+    phone =
     transaction_ref =
     expiry_date = 
     amount = 
-    
+
