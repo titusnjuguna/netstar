@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fancy Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+        body {
+            display: flex;
+            background-color: #f0f2f5;
+        }
+        .sidebar {
+            width: 250px;
+            height: 100vh;
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            position: fixed;
+            left: 0;
+            top: 0;
+        }
+        .sidebar h2 {
+            margin-bottom: 30px;
+            font-size: 24px;
+            text-align: center;
+        }
+        .sidebar ul {
+            list-style-type: none;
+        }
+        .sidebar ul li {
+            margin-bottom: 15px;
+        }
+        .sidebar ul li a {
+            color: white;
+            text-decoration: none;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+        }
+        .sidebar ul li a i {
+            margin-right: 10px;
+            width: 20px;
+        }
+        .main-content {
+            flex: 1;
+            margin-left: 250px;
+            padding: 20px;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .top-bar .icon {
+            font-size: 24px;
+            margin-left: 20px;
+            cursor: pointer;
+            position: relative;
+        }
+        .dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 5px;
+            padding: 10px;
+        }
+        .dropdown.show {
+            display: block;
+        }
+        .dropdown a {
+            display: block;
+            padding: 5px 10px;
+            color: #333;
+            text-decoration: none;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        canvas {
+            width: 100% !important;
+            height: 200px !important;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 70px;
+                padding: 10px;
+            }
+            .sidebar h2, .sidebar ul li a span {
+                display: none;
+            }
+            .main-content {
+                margin-left: 70px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Dashboard</h2>
+        <ul>
+            <li><a href="#"><i class="fas fa-user"></i><span>User</span></a></li>
+            <li><a href="#"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a></li>
+            <li><a href="#"><i class="fas fa-credit-card"></i><span>Payments</span></a></li>
+            <li><a href="setup.html" ><i class="fas fa-network-wired"></i><span>Router Setup</span></a></li>
+            <li><a href="#"><i class="fas fa-laptop"></i><span>Devices</span></a></li>
+        </ul>
+    </div>
+    <div class="main-content">
+        <div class="top-bar">
+            <div class="icon">
+                <i class="fas fa-bell"></i>
+            </div>
+            <div class="icon" onclick="toggleDropdown()">
+                <i class="fas fa-user-circle"></i>
+                <div class="dropdown" id="userDropdown">
+                    <a href="#">Profile</a>
+                    <a href="#">Settings</a>
+                    <a href="#">Sign Out</a>
+                </div>
+            </div>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <h3>Total Users Connected</h3>
+                <canvas id="usersChart"></canvas>
+            </div>
+            <div class="card">
+                <h3>Total Account Balance</h3>
+                <canvas id="balanceChart"></canvas>
+            </div>
+            <div class="card">
+                <h3>Total Blacklisted Customers</h3>
+                <canvas id="blacklistedChart"></canvas>
+            </div>
+            <div class="card">
+                <h3>Total Routerboard Integrated</h3>
+                <canvas id="routerboardChart"></canvas>
+            </div>  <div class="card">
+                <h3>Total Blacklisted Customers</h3>
+                <canvas id="blacklistedChart"></canvas>
+            </div>
+            <div class="card">
+                <h3>Total Routerboard Integrated</h3>
+                <canvas id="routerboardChart"></canvas>
+            </div>
+
+        </div>
+    </div>
+    <script>
+        function toggleDropdown() {
+            document.getElementById("userDropdown").classList.toggle("show");
+        }
+
+        window.onclick = function(event) {
+            if (!event.target.matches('.icon')) {
+                var dropdowns = document.getElementsByClassName("dropdown");
+                for (var i = 0; i < dropdowns.length; i++) {
+                    var openDropdown = dropdowns[i];
+                    if (openDropdown.classList.contains('show')) {
+                        openDropdown.classList.remove('show');
+                    }
+                }
+            }
+        }
+
+        // Sample data for charts
+        const usersData = {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            datasets: [{
+                label: 'Users',
+                data: [65, 59, 80, 81, 56, 55],
+                fill: false,
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        };
+
+        const balanceData = {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            datasets: [{
+                label: 'Balance',
+                data: [12000, 19000, 3000, 5000, 2000, 3000],
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1
+            }]
+        };
+
+        const blacklistedData = {
+            labels: ['Blacklisted', 'Non-Blacklisted'],
+            datasets: [{
+                label: 'Customers',
+                data: [300, 1700],
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.2)',
+                    'rgba(54, 162, 235, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)'
+                ],
+                borderWidth: 1
+            }]
+        };
+        const blacklistedData2 = {
+            labels: ['Blacklisted', 'Non-Blacklisted'],
+            datasets: [{
+                label: 'Customers',
+                data: [300, 1700],
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.2)',
+                    'rgba(54, 162, 235, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)'
+                ],
+                borderWidth: 1
+            }]
+        };
+
+        const routerboardData = {
+            labels: ['Integrated', 'Non-Integrated'],
+            datasets: [{
+                label: 'Routerboards',
+                data: [850, 150],
+                backgroundColor: [
+                    'rgba(75, 192, 192, 0.2)',
+                    'rgba(153, 102, 255, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)'
+                ],
+                borderWidth: 1
+            }]
+        };
+     
+        const routerboardData2 = {
+            labels: ['Integrated', 'Non-Integrated'],
+            datasets: [{
+                label: 'Routerboards',
+                data: [850, 150],
+                backgroundColor: [
+                    'rgba(75, 192, 192, 0.2)',
+                    'rgba(153, 102, 255, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)'
+                ],
+                borderWidth: 1
+            }]
+        };
+
+        // Create charts
+        new Chart(document.getElementById('usersChart'), {
+            type: 'line',
+            data: usersData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        new Chart(document.getElementById('balanceChart'), {
+            type: 'bar',
+            data: balanceData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        new Chart(document.getElementById('blacklistedChart'), {
+            type: 'pie',
+            data: blacklistedData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        new Chart(document.getElementById('routerboardChart'), {
+            type: 'doughnut',
+            data: routerboardData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+        new Chart(document.getElementById('blacklistedChart2'), {
+            type: 'pie',
+            data: blacklistedData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        new Chart(document.getElementById('routerboardChart2'), {
+            type: 'doughnut',
+            data: routerboardData2,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    </script>
+</body>
+</html>
