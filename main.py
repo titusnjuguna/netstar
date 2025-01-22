@@ -39,8 +39,7 @@ async def root():
 # Initialize database on startup
 @app.on_event("startup")
 def startup():
-
-    print(123)
+    print(12345)
     # await init_db()
 
 @app.get("/home", response_class=HTMLResponse)

@@ -12,6 +12,7 @@ class RouterInfo(Base):
     user_name = Column(String)
     location = Column(String)
     port = Column(String)
+    till_number = Column(String)
     products = relationship("Products", back_populates="router")
     created_at = Column(DateTime,default=datetime.utcnow)
 

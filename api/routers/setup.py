@@ -11,7 +11,6 @@ from librouteros import connect
 
 router=APIRouter()
 
-
 @router.post("/set/router", response_model=RouterResponse)
 def set_router(routerInfo: RouterCreate, db: Session = Depends(get_db)):
     try:
@@ -34,9 +33,12 @@ def get_all_routers(db: Session = Depends(get_db)):
     routers = db.query(RouterInfo).all()
     # for r in routers:
     #     print(r.products)
-    total_count = db.query(RouterInfo).count()  # Get total count of routers
-    router_responses = [RouterResponser(id=r.id, ip_address=r.ip_address, username=r.user_name,location=r.location,status='Online',products=[]) for r in routers]
-    return RouterDTO(success=True, msg="Router settings retrieved successfully", total=total_count, routers=router_responses)
+    try:
+        total_count = db.query(RouterInfo).count()  # Get total count of routers
+        router_responses = [RouterResponser(id=r.id, ip_address=r.ip_address, username=r.user_name,location=r.location,status='Online',products=[]) for r in routers]
+        return RouterDTO(success=True, msg="Router settings retrieved successfully", total=total_count, routers=router_responses)
+    except:
+        return RouterDTO(success=True,msg="No router Found",total=0)
 
 @router.get("/device/online/{id}")
 def check_get_device_resource(id: int, db: Session = Depends(get_db)):
