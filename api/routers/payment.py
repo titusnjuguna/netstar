@@ -87,14 +87,14 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
         print(traceback.format_exc())  # Print full stack trace
         return GeneralResponse(message=f"Error in payment request-{stk_response}", success=False, code=400)
 
-# @router.post('/callback')
-# def payment_callback_url(request):
-#     request_object = request.body
-#     decoded_req_object = request_object.decode('utf-8').replace("'", '"')
-#     json_data = json.loads(decoded_req_object)
-#     with open('TestingHot.json', 'w') as f:
-#         json.dump(json_data,f)
-#     return Response({'message':'success','code':200},status=HTTP_200_OK)
+@router.post('/callback')
+def payment_callback_url(request):
+    request_object = request.body
+    decoded_req_object = request_object.decode('utf-8').replace("'", '"')
+    json_data = json.loads(decoded_req_object)
+    with open('TestingHot.json', 'w') as f:
+        json.dump(json_data,f)
+    return GeneralResponse(message='success',code=200,success=True,code=200)
 
     # pass
     # {    
