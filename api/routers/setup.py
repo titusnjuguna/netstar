@@ -78,7 +78,7 @@ def create_products(product: ProductCreate,db: Session = Depends(get_db)):
         db.refresh(new_product)
         router_id = product.router
         result = set_speed_limit(download_speed=product.download,upload_speed=product.upload,router_id=router_id,db=db)
-        return RouterResponse(success=f'{True}{result}', msg="Product created Successfully.")
+        return RouterResponse(success=True, msg=f"Product created Successfully {result}.")
     except Exception as e:
         # Handle errors and return failure response
         return RouterResponse(success=False, msg=f"Error: {str(e)}")
