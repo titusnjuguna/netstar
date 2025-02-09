@@ -1,18 +1,18 @@
-from fastapi import APIRouter,Depends
+from fastapi import APIRouter,Depends,Request
 from sqlalchemy.orm import Session
 from api.db.session import get_db
 from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,PaymentConfigResponse,GeneralResponse
 from api.models.payment import *
 from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
-router=APIRouter()
+import json
+router=APIRouter(
+    prefix="/payment",  # Optional but recommended
+    tags=["payment"]
+)
 
 
-
-
-
-from fastapi import Request
-@router.post('/callback', response_model=GeneralResponse)
+@router.post('/callback', response_model=GeneralResponse,tags=["payment"])
 async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     request_object =  await request.body()
     decoded_req_object = request_object.decode('utf-8').replace("'", '"')
@@ -20,8 +20,6 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     with open('TestingHot.json', 'w') as f:
         json.dump(json_data,f)
     return GeneralResponse(message='success',success=True,code=200)
-
-
 
 
 @router.post('/setup',response_model=None)
