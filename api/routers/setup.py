@@ -9,9 +9,12 @@ from typing import List
 from sqlalchemy.sql import desc
 from librouteros import connect
 
-router=APIRouter()
+router=APIRouter(
+    prefix="/api",  # Optional but recommended
+    tags=["Setup"]
+)
 
-@router.post("/set/router", response_model=RouterResponse)
+@router.post("/add/router", response_model=RouterResponse)
 def set_router(routerInfo: RouterCreate, db: Session = Depends(get_db)):
     try:
         new_router = RouterInfo(
@@ -40,7 +43,7 @@ def get_all_routers(db: Session = Depends(get_db)):
     except:
         return RouterDTO(success=True,msg="No router Found",total=0)
 
-@router.get("/device/online/{id}")
+@router.get("/online/device/{id}")
 def check_get_device_resource(id: int, db: Session = Depends(get_db)):
     router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
     if router:
@@ -59,7 +62,7 @@ def check_get_device_resource(id: int, db: Session = Depends(get_db)):
         else:
             return RouterDetail(success=True,msg="Router is offline",data={"cpu":0,"uptime":0,"status":"Offline"})
 
-@router.post("/create/products")
+@router.post("/create/product")
 def create_products(product: ProductCreate,db: Session = Depends(get_db)):
  
     try:
