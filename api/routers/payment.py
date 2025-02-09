@@ -86,20 +86,17 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
         import traceback
         print(traceback.format_exc())  # Print full stack trace
         return GeneralResponse(message=f"Error in payment request-{stk_response}", success=False, code=400)
+        
 from fastapi import Request
-@router.post('/callback')
+@router.post('/callback', response_model=GeneralResponse)
 def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     request_object = request.body
     decoded_req_object = request_object.decode('utf-8').replace("'", '"')
     json_data = json.loads(decoded_req_object)
     with open('TestingHot.json', 'w') as f:
         json.dump(json_data,f)
-    # return GeneralResponse(message='success',code=200,success=True)
-    return {
-        "message": "success",
-        "code": 200,
-        "success": True
-    }
+    return GeneralResponse(message='success',code=200,success=True)
+
 
     # pass
     # {    
