@@ -94,7 +94,7 @@ def payment_callback_url(request):
     json_data = json.loads(decoded_req_object)
     with open('TestingHot.json', 'w') as f:
         json.dump(json_data,f)
-    return GeneralResponse(message='success',code=200,success=True,code=200)
+    return GeneralResponse(message='success',code=200,success=True)
 
     # pass
     # {    
