@@ -7,6 +7,23 @@ from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
 router=APIRouter()
 
+
+
+
+
+from fastapi import Request
+@router.post('/callback', response_model=GeneralResponse)
+async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
+    request_object =  await request.body()
+    decoded_req_object = request_object.decode('utf-8').replace("'", '"')
+    json_data = json.loads(decoded_req_object)
+    with open('TestingHot.json', 'w') as f:
+        json.dump(json_data,f)
+    return GeneralResponse(message='success',success=True,code=200)
+
+
+
+
 @router.post('/setup',response_model=None)
 def add_payment_config(payment:PaymentConfigRequest,db:Session = Depends(get_db)):
     routerId = payment.router_id
@@ -87,15 +104,6 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
         print(traceback.format_exc())  # Print full stack trace
         return GeneralResponse(message=f"Error in payment request-{stk_response}", success=False, code=400)
 
-from fastapi import Request
-@router.post('/callback', response_model=GeneralResponse)
-async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
-    request_object =  await request.body()
-    decoded_req_object = request_object.decode('utf-8').replace("'", '"')
-    json_data = json.loads(decoded_req_object)
-    with open('TestingHot.json', 'w') as f:
-        json.dump(json_data,f)
-    return GeneralResponse(message='success',success=True,code=200)
 
 
     # pass
