@@ -50,7 +50,7 @@ def stk_push_request(amount,phone,till_number,db):
         "PartyA":phone,    
         "PartyB": till_number,    
         "PhoneNumber": phone,    
-        "CallBackURL": "http://173.249.30.121:9591/api/v1/logs/test",    
+        "CallBackURL": "https://test.staging.test.naiverah.com/payment/callback",    
         "AccountReference": f'Session:{session_ref}',    
         "TransactionDesc":f"Payment for hotspot {phone}"
         }
