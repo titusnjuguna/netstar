@@ -7,9 +7,12 @@ from typing import List
 from api.db.session import get_db,SessionLocal
 from api.schemas.users import UserResponse,UserCreate
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/api",  # Optional but recommended
+    tags=["Users"] 
+)
 
-@router.post("/users/", response_model=UserResponse)
+@router.post("/user/create", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.username == user.username).first()
     if db_user:
@@ -24,12 +27,12 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     
     return new_user
 
-@router.get("/users/", response_model=List[UserResponse])
+@router.get("/get/users", response_model=List[UserResponse])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     users = db.query(User).offset(skip).limit(limit).all()
     return users
 
-@router.delete("/users/{user_id}")
+@router.delete("/delete/user/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:

@@ -7,12 +7,12 @@ from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
 import json
 router=APIRouter(
-    prefix="/payment",  # Optional but recommended
+    prefix="/api/payment",  # Optional but recommended
     tags=["payment"]
 )
 
 
-@router.post('/callback', response_model=GeneralResponse,tags=["payment"])
+@router.post('/callback',response_model=GeneralResponse,tags=["payment"])
 async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     request_object =  await request.body()
     decoded_req_object = request_object.decode('utf-8').replace("'", '"')
