@@ -1,15 +1,69 @@
-from fastapi import APIRouter,Depends,Request
+from fastapi import APIRouter,Depends,Request,Query
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
+from datetime import datetime
 from api.db.session import get_db
-from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,PaymentConfigResponse,GeneralResponse
+from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,PaymentConfigResponse,GeneralResponse,SubscriptionOut,PaginationInfo,SubscriptionsListResponse
 from api.models.payment import *
 from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
 import json
 router=APIRouter(
-    prefix="/api/payment",  # Optional but recommended
+    prefix="/api",  # Optional but recommended
     tags=["payment"]
 )
+
+
+@router.get('/v1/get/subscriptions', response_model=SubscriptionsListResponse, tags=["payment"])
+def get_subscriptions(page: int = Query(1, ge=1), db: Session = Depends(get_db)):
+    per_page = 20
+    total_items = db.query(Subscription).count()
+    total_pages = max((total_items + per_page - 1) // per_page, 1)
+    subscriptions = (
+        db.query(Subscription)
+        .order_by(desc(Subscription.id))
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    now = datetime.utcnow()
+    subscription_responses = []
+    for sub in subscriptions:
+        package = sub.package
+        latest_payment = (
+            db.query(Payment)
+            .filter(Payment.subscription_id == sub.id)
+            .order_by(desc(Payment.payment_date))
+            .first()
+        )
+        if not sub.is_active:
+            status = "inactive"
+        elif sub.end_date and sub.end_date < now:
+            status = "expired"
+        else:
+            status = "active"
+
+        subscription_responses.append(
+            SubscriptionOut(
+                id=f"s{sub.id}",
+                mac="",
+                phone=latest_payment.phone if latest_payment else "",
+                productName=package.name if package else "",
+                startTime=sub.start_date,
+                expiryTime=sub.end_date,
+                dataUsed=0,
+                dataCap=int(package.data_limit * 1024 * 1024) if package and package.data_limit else 0,
+                status=status,
+                ipAddress="",
+            )
+        )
+
+    return SubscriptionsListResponse(
+        message="Subscriptions fetched successfully",
+        subscriptions=subscription_responses,
+        pagination=PaginationInfo(page=page, perPage=per_page, totalItems=total_items, totalPages=total_pages),
+    )
 
 
 @router.post('/callback',response_model=GeneralResponse,tags=["payment"])

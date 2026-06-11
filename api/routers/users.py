@@ -23,7 +23,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     
-    add_user_to_router(user.username, user.password, "1M/1M")  # Default rate limit
+    # add_user_to_router(user.username, user.password, "1M/1M")  # Default rate limit
     
     return new_user
 
@@ -43,3 +43,41 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     db.delete(user)
     db.commit()
     return {"message": "User deleted successfully"}
+
+from datetime import datetime, timedelta, timezone
+import jwt
+
+SECRET_KEY = "MoiAlikufa2020"
+ALGORITHM = "HS256"
+
+def generate_token(user: User):
+    payload = {
+        "user_id": user.id,
+        "email": user.email,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=24)
+    }
+
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+@router.post("/v1/auth/login")
+def login(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(
+        User.email == user.email
+    ).first()
+
+    if not db_user or db_user.hashed_password != user.password:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+
+    token = generate_token(db_user)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": db_user.id,
+            "email": db_user.email
+        }
+    }

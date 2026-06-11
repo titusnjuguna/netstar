@@ -93,8 +93,8 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import Session
 
 Base = declarative_base()
-# DATABASE_URL = "sqlite:///./test.db"
-DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5434/netstat"
+DATABASE_URL = "sqlite:///./test.db"
+# DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5434/netstat"
 engine = create_engine(
     DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

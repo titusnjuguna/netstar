@@ -6,11 +6,13 @@ services:
     container_name: fastapi_app
     ports:
       - "8000:8000"
+    volumes:
+      - .:/app
     environment:
-      # - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/netstar
-      - DATABASE_URL=postgresql+asyncpg://postgres:208251001Tito@localhost:5432/postgres
+      - DATABASE_URL=postgresql+asyncpg://postgres:208251001Tito@db:5432/netstar
     depends_on:
       - db
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   db:
     image: postgres:13

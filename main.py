@@ -10,6 +10,7 @@ from api.db.session import engine, Base
 from api.routers.payment import router as payment_router
 from api.routers.setup import router as set_up_router
 from api.routers.users import router as users_router
+from api.routers.dashboard import router as dashboard_router
 import asyncpg
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
@@ -39,19 +40,10 @@ async def root():
 # Initialize database on startup
 @app.on_event("startup")
 def startup():
-    print(12345)
+    print(1234567)
     # await init_db()
 
-@app.get("/home", response_class=HTMLResponse)
-async def home_page(request: Request):
-    return template.TemplateResponse(
-        request=request, name="index.html")
-
-@app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request):
-    return template.TemplateResponse(
-        request=request, name="dashboard.html")
-    
+   
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
@@ -68,3 +60,4 @@ Base.metadata.create_all(bind=engine)
 app.include_router(payment_router)
 app.include_router(set_up_router)
 app.include_router(users_router)
+app.include_router(dashboard_router)

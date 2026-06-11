@@ -1,5 +1,7 @@
 
 from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
 
 class UserCreate(BaseModel):
     username: str
@@ -37,3 +39,29 @@ class GeneralResponse(BaseModel):
     message: str
     success: bool
     code: int
+
+
+class SubscriptionOut(BaseModel):
+    id: str
+    mac: str
+    phone: str
+    productName: str
+    startTime: datetime
+    expiryTime: Optional[datetime] = None
+    dataUsed: int
+    dataCap: int
+    status: str
+    ipAddress: str
+
+
+class PaginationInfo(BaseModel):
+    page: int
+    perPage: int
+    totalItems: int
+    totalPages: int
+
+
+class SubscriptionsListResponse(BaseModel):
+    message: str
+    subscriptions: List[SubscriptionOut]
+    pagination: PaginationInfo

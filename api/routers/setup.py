@@ -1,13 +1,14 @@
-from fastapi import APIRouter,Depends
-from api.services.setup import check_mikrotik_status,set_speed_limit
-from api.schemas.setup import RouterCreate,RouterResponse,RouterDTO,RouterResponser,RouterDetail,ProductCreate,ProductResponse,ProductsDTO,RouterResponserDTO
+import json
+from fastapi import APIRouter,Depends,HTTPException,Query
+from fastapi.responses import StreamingResponse
+from api.services.setup import check_mikrotik_status,get_router_live_stats,render_captive_portal_html,deploy_captive_portal,discover_routers,API_BASE_URL
+from api.services.payment import stk_push_request
+from api.schemas.setup import RouterCreate,RouterResponse,RouterDetail,RouterOut,RoutersListResponse,RouterPingResponse,RouterFullCreate,HotspotPayRequest,DiscoveredRouter,DiscoverRoutersResponse,ProductCreate,ProductOut,ProductsListResponse,ProductDetailResponse,MessageResponse
+from api.schemas.payment import GeneralResponse
 from sqlalchemy.orm import Session
-from api.db.session import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
+from api.db.session import get_db,SessionLocal
 from api.models.setup import RouterInfo,Products
-from typing import List
 from sqlalchemy.sql import desc
-from librouteros import connect
 
 router=APIRouter(
     prefix="/api",  # Optional but recommended
@@ -18,10 +19,12 @@ router=APIRouter(
 def set_router(routerInfo: RouterCreate, db: Session = Depends(get_db)):
     try:
         new_router = RouterInfo(
+        name=routerInfo.name,
         ip_address=routerInfo.ip_address,
         password=routerInfo.password,
         user_name=routerInfo.username,
-        location = routerInfo.location
+        location = routerInfo.location,
+        port=routerInfo.port,
         )
         db.add(new_router)
         db.commit()
@@ -31,17 +34,127 @@ def set_router(routerInfo: RouterCreate, db: Session = Depends(get_db)):
         # Handle errors and return failure response
         return RouterResponse(success=False, msg=f"Error: {str(e)}")
 
-@router.get("/get/routers", response_model=RouterDTO)
+
+@router.post("/v1/create/router")
+def create_router(routerInfo: RouterFullCreate):
+    def event_stream():
+        def sse(step, status, message, **extra):
+            return f"{json.dumps({'step': step, 'status': status, 'message': message, **extra})}\n\n"
+
+        db = SessionLocal()
+        try:
+            yield sse("save", "in_progress", "Saving router configuration...")
+            new_router = RouterInfo(
+                name=routerInfo.name,
+                ip_address=routerInfo.ipAddress,
+                user_name=routerInfo.username,
+                password=routerInfo.password,
+                hotspot_name=routerInfo.hotspotName,
+                till_number=routerInfo.tillNumber,
+                port=8728,
+            )
+            try:
+                db.add(new_router)
+                db.commit()
+                db.refresh(new_router)
+            except Exception as e:
+                db.rollback()
+                yield sse("save", "failed", f"Failed to save router: {e}")
+                return
+            router_id = f"r{new_router.id}"
+            yield sse("save", "done", "Router configuration saved", routerId=router_id)
+
+            yield sse("connect", "in_progress", "Connecting to MikroTik device...")
+            stats = get_router_live_stats(host=new_router.ip_address, username=new_router.user_name,
+                                           password=new_router.password, port=new_router.port)
+            if stats["status"] == "online":
+                yield sse("connect", "done", "Connected to MikroTik device", cpuLoad=stats["cpuLoad"],
+                          memoryUsage=stats["memoryUsage"], uptime=stats["uptime"])
+            else:
+                yield sse("connect", "failed", "Could not reach MikroTik device - check IP address and credentials")
+
+            yield sse("portal", "in_progress", "Deploying captive portal page...")
+            html_content = render_captive_portal_html(
+                hotspot_name=new_router.hotspot_name,
+                router_id=new_router.id,
+                till_number=new_router.till_number,
+            )
+            success, message = deploy_captive_portal(host=new_router.ip_address, username=new_router.user_name,
+                                                       password=new_router.password, html_content=html_content)
+            yield sse("portal", "done" if success else "failed", message)
+
+            yield sse("complete", "done", "Router setup complete", routerId=router_id, routerStatus=stats["status"])
+        finally:
+            db.close()
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/hotspot/pay/{router_id}", response_model=GeneralResponse)
+def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depends(get_db)):
+    db_router = db.query(RouterInfo).filter(RouterInfo.id == router_id).first()
+    if not db_router:
+        return GeneralResponse(message="Router not found", success=False, code=404)
+    if not db_router.till_number:
+        return GeneralResponse(message="Router has no till number configured", success=False, code=400)
+    try:
+        product_id = int(payload.productId)
+    except ValueError:
+        return GeneralResponse(message="Invalid package selected", success=False, code=400)
+    product = db.query(Products).filter(Products.id == product_id).first()
+    if not product:
+        return GeneralResponse(message="Package not found", success=False, code=404)
+    try:
+        stk_push_request(amount=product.price, phone=payload.phone, till_number=db_router.till_number, db=db)
+        return GeneralResponse(message="Payment request sent. Check your phone.", success=True, code=200)
+    except Exception as e:
+        return GeneralResponse(message=f"Error initiating payment: {e}", success=False, code=400)
+
+
+@router.get("/v1/get/routers", response_model=RoutersListResponse)
 def get_all_routers(db: Session = Depends(get_db)):
     routers = db.query(RouterInfo).all()
-    # for r in routers:
-    #     print(r.products)
-    try:
-        total_count = db.query(RouterInfo).count()  # Get total count of routers
-        router_responses = [RouterResponser(id=r.id, ip_address=r.ip_address, username=r.user_name,location=r.location,status='Online',products=[]) for r in routers]
-        return RouterDTO(success=True, msg="Router settings retrieved successfully", total=total_count, routers=router_responses)
-    except:
-        return RouterDTO(success=True,msg="No router Found",total=0)
+    router_responses = []
+    for r in routers:
+        stats = get_router_live_stats(host=r.ip_address, username=r.user_name, password=r.password, port=r.port)
+        router_responses.append(RouterOut(
+            id=f"r{r.id}",
+            name=r.name or "",
+            ipAddress=r.ip_address,
+            port=r.port or 8728,
+            username=r.user_name,
+            status=stats["status"],
+            cpuLoad=stats["cpuLoad"],
+            memoryUsage=stats["memoryUsage"],
+            uptime=stats["uptime"],
+            activeUsers=stats["activeUsers"],
+        ))
+    return RoutersListResponse(message="Routers fetched successfully", routers=router_responses)
+
+
+@router.get("/v1/discover/routers", response_model=DiscoverRoutersResponse)
+def discover_routers_endpoint(timeout: int = Query(5, ge=1, le=30)):
+    devices = discover_routers(timeout=timeout)
+    message = f"Discovered {len(devices)} device(s)" if devices else "No MikroTik devices found on the network"
+    return DiscoverRoutersResponse(message=message, devices=[DiscoveredRouter(**d) for d in devices])
+
+
+@router.get("/ping/router/{id}", response_model=RouterPingResponse)
+def ping_router(id: int, db: Session = Depends(get_db)):
+    db_router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
+    if not db_router:
+        raise HTTPException(status_code=404, detail="Router not found")
+    stats = get_router_live_stats(host=db_router.ip_address, username=db_router.user_name,
+                                   password=db_router.password, port=db_router.port)
+    message = "Router is online" if stats["status"] == "online" else "Router is unreachable"
+    return RouterPingResponse(
+        message=message,
+        status=stats["status"],
+        cpuLoad=stats["cpuLoad"],
+        memoryUsage=stats["memoryUsage"],
+        uptime=stats["uptime"],
+        activeUsers=stats["activeUsers"],
+    )
 
 @router.get("/online/device/{id}")
 def check_get_device_resource(id: int, db: Session = Depends(get_db)):
@@ -62,34 +175,81 @@ def check_get_device_resource(id: int, db: Session = Depends(get_db)):
         else:
             return RouterDetail(success=True,msg="Router is offline",data={"cpu":0,"uptime":0,"status":"Offline"})
 
-@router.post("/create/product")
-def create_products(product: ProductCreate,db: Session = Depends(get_db)):
- 
-    try:
-        new_product = Products(
-        product_name = product.product_name,
-        product_category = product.product_category,
-        download = product.download,
-        upload = product.upload,
-        price = product.price,
-        billing_period = product.billing_period,
-        product_status = product.product_status,
-        router_id = product.router
-        )
-        db.add(new_product)
-        db.commit()
-        db.refresh(new_product)
-        router_id = product.router
-        result = set_speed_limit(download_speed=product.download,upload_speed=product.upload,router_id=router_id,db=db)
-        return RouterResponse(success=True, msg=f"Product created Successfully {result}.")
-    except Exception as e:
-        # Handle errors and return failure response
-        return RouterResponse(success=False, msg=f"Error: {str(e)}")
+@router.post("/v1/create/product", response_model=ProductDetailResponse)
+def create_products(product: ProductCreate, db: Session = Depends(get_db)):
+    new_product = Products(
+        name=product.name,
+        price=product.price,
+        duration=product.duration,
+        speed_limit=product.speedLimit,
+        data_limit=product.dataLimit,
+    )
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
+    return ProductDetailResponse(
+        message="Product created successfully",
+        product=ProductOut(
+            id=str(new_product.id),
+            name=new_product.name,
+            price=new_product.price,
+            duration=new_product.duration,
+            speedLimit=new_product.speed_limit,
+            dataLimit=new_product.data_limit,
+            createdAt=new_product.created_at,
+        ),
+    )
 
-@router.get("/get/products", response_model=ProductsDTO)
-def get_all_routers(db: Session = Depends(get_db)):
+
+@router.put("/v1/update/product/{id}", response_model=ProductDetailResponse)
+def update_product(id: int, product: ProductCreate, db: Session = Depends(get_db)):
+    db_product = db.query(Products).filter(Products.id == id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    db_product.name = product.name
+    db_product.price = product.price
+    db_product.duration = product.duration
+    db_product.speed_limit = product.speedLimit
+    db_product.data_limit = product.dataLimit
+    db.commit()
+    db.refresh(db_product)
+    return ProductDetailResponse(
+        message="Product updated successfully",
+        product=ProductOut(
+            id=str(db_product.id),
+            name=db_product.name,
+            price=db_product.price,
+            duration=db_product.duration,
+            speedLimit=db_product.speed_limit,
+            dataLimit=db_product.data_limit,
+            createdAt=db_product.created_at,
+        ),
+    )
+
+
+@router.delete("/v1/delete/product/{id}", response_model=MessageResponse)
+def delete_product(id: int, db: Session = Depends(get_db)):
+    db_product = db.query(Products).filter(Products.id == id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    db.delete(db_product)
+    db.commit()
+    return MessageResponse(message="Product deleted successfully")
+
+@router.get("/v1/get/products", response_model=ProductsListResponse)
+def get_all_products(db: Session = Depends(get_db)):
     products = db.query(Products).order_by(desc(Products.id)).all()
-    total_count = db.query(Products).count()  # Get total count of routers
-    product_responses = [ProductResponse(id=p.id, product_name=p.product_name, product_category=p.product_category,download=p.download,upload = p.upload , price=p.price,billing_period=p.billing_period,product_status=p.product_status) for p in products]
-    return ProductsDTO(success=True, msg="Products successfully", total=total_count, products=product_responses)
+    product_responses = [
+        ProductOut(
+            id=str(p.id),
+            name=p.name,
+            price=p.price,
+            duration=p.duration or 0,
+            speedLimit=p.speed_limit,
+            dataLimit=p.data_limit or "Unlimited",
+            createdAt=p.created_at,
+        )
+        for p in products
+    ]
+    return ProductsListResponse(message="Products fetched successfully", products=product_responses)
 
