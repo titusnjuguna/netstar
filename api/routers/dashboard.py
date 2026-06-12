@@ -5,6 +5,7 @@ from datetime import date
 from api.db.session import get_db
 from api.models.payment import Payment, Subscription
 from api.models.setup import RouterInfo
+from api.services.auth import verify_token
 from api.schemas.dashboard import (
     DashboardSummaryResponse,
     DashboardMetrics,
@@ -21,7 +22,7 @@ router = APIRouter(
 
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
-def get_dashboard_summary(db: Session = Depends(get_db)):
+def get_dashboard_summary(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     total_revenue = db.query(func.sum(Payment.amount)).scalar() or 0
     active_sessions = db.query(Subscription).filter(Subscription.is_active == True).count()
     total_routers = db.query(RouterInfo).count()

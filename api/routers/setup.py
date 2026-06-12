@@ -8,6 +8,7 @@ from api.schemas.payment import GeneralResponse
 from sqlalchemy.orm import Session
 from api.db.session import get_db,SessionLocal
 from api.models.setup import RouterInfo,Products
+from api.services.auth import verify_token
 from sqlalchemy.sql import desc
 
 router=APIRouter(
@@ -16,7 +17,7 @@ router=APIRouter(
 )
 
 @router.post("/add/router", response_model=RouterResponse)
-def set_router(routerInfo: RouterCreate, db: Session = Depends(get_db)):
+def set_router(routerInfo: RouterCreate, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     try:
         new_router = RouterInfo(
         name=routerInfo.name,
@@ -36,7 +37,7 @@ def set_router(routerInfo: RouterCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/v1/create/router")
-def create_router(routerInfo: RouterFullCreate):
+def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token)):
     def event_stream():
         def sse(step, status, message, **extra):
             return f"{json.dumps({'step': step, 'status': status, 'message': message, **extra})}\n\n"
@@ -112,7 +113,7 @@ def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depend
 
 
 @router.get("/v1/get/routers", response_model=RoutersListResponse)
-def get_all_routers(db: Session = Depends(get_db)):
+def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     routers = db.query(RouterInfo).all()
     router_responses = []
     for r in routers:
@@ -133,14 +134,14 @@ def get_all_routers(db: Session = Depends(get_db)):
 
 
 @router.get("/v1/discover/routers", response_model=DiscoverRoutersResponse)
-def discover_routers_endpoint(timeout: int = Query(5, ge=1, le=30)):
+def discover_routers_endpoint(timeout: int = Query(5, ge=1, le=30), _: dict = Depends(verify_token)):
     devices = discover_routers(timeout=timeout)
     message = f"Discovered {len(devices)} device(s)" if devices else "No MikroTik devices found on the network"
     return DiscoverRoutersResponse(message=message, devices=[DiscoveredRouter(**d) for d in devices])
 
 
 @router.get("/ping/router/{id}", response_model=RouterPingResponse)
-def ping_router(id: int, db: Session = Depends(get_db)):
+def ping_router(id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     db_router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
     if not db_router:
         raise HTTPException(status_code=404, detail="Router not found")
@@ -157,7 +158,7 @@ def ping_router(id: int, db: Session = Depends(get_db)):
     )
 
 @router.get("/online/device/{id}")
-def check_get_device_resource(id: int, db: Session = Depends(get_db)):
+def check_get_device_resource(id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
     if router:
         host = router.ip_address
@@ -176,7 +177,7 @@ def check_get_device_resource(id: int, db: Session = Depends(get_db)):
             return RouterDetail(success=True,msg="Router is offline",data={"cpu":0,"uptime":0,"status":"Offline"})
 
 @router.post("/v1/create/product", response_model=ProductDetailResponse)
-def create_products(product: ProductCreate, db: Session = Depends(get_db)):
+def create_products(product: ProductCreate, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     new_product = Products(
         name=product.name,
         price=product.price,
@@ -202,7 +203,7 @@ def create_products(product: ProductCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/v1/update/product/{id}", response_model=ProductDetailResponse)
-def update_product(id: int, product: ProductCreate, db: Session = Depends(get_db)):
+def update_product(id: int, product: ProductCreate, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     db_product = db.query(Products).filter(Products.id == id).first()
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -228,7 +229,7 @@ def update_product(id: int, product: ProductCreate, db: Session = Depends(get_db
 
 
 @router.delete("/v1/delete/product/{id}", response_model=MessageResponse)
-def delete_product(id: int, db: Session = Depends(get_db)):
+def delete_product(id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     db_product = db.query(Products).filter(Products.id == id).first()
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")

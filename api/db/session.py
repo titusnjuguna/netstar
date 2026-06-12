@@ -86,6 +86,7 @@ from contextlib import asynccontextmanager
 #     async with async_session() as session:  # assuming async_session() is configured with your database
 
 #         yield session
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -93,8 +94,7 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import Session
 
 Base = declarative_base()
-DATABASE_URL = "sqlite:///./test.db"
-# DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5434/netstat"
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./test.db")
 engine = create_engine(
     DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

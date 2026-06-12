@@ -2,14 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from api.models.users import  User
 from api.services.setup import add_user_to_router, remove_user_from_router
+from api.services.auth import verify_token, SECRET_KEY, ALGORITHM
 from pydantic import BaseModel
 from typing import List
 from api.db.session import get_db,SessionLocal
 from api.schemas.users import UserResponse,UserCreate
 
 router = APIRouter(
-    prefix="/api",  # Optional but recommended
-    tags=["Users"] 
+    prefix="/api", 
+    tags=["Users"]
 )
 
 @router.post("/user/create", response_model=UserResponse)
@@ -28,12 +29,12 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 @router.get("/get/users", response_model=List[UserResponse])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     users = db.query(User).offset(skip).limit(limit).all()
     return users
 
 @router.delete("/delete/user/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(user_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -47,14 +48,11 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
 from datetime import datetime, timedelta, timezone
 import jwt
 
-SECRET_KEY = "MoiAlikufa2020"
-ALGORITHM = "HS256"
-
 def generate_token(user: User):
     payload = {
         "user_id": user.id,
         "email": user.email,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=24)
+        "exp": datetime.now(timezone.utc) + timedelta(hours=12)
     }
 
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -62,8 +60,9 @@ def generate_token(user: User):
 @router.post("/v1/auth/login")
 def login(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(
-        User.email == user.email
+        User.username == user.username
     ).first()
+    print (db_user)
 
     if not db_user or db_user.hashed_password != user.password:
         raise HTTPException(
@@ -78,6 +77,7 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": {
             "id": db_user.id,
-            "email": db_user.email
+            "email": db_user.email,
+            "username": db_user.username
         }
     }

@@ -7,6 +7,7 @@ from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,Paym
 from api.models.payment import *
 from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
+from api.services.auth import verify_token
 import json
 router=APIRouter(
     prefix="/api",  # Optional but recommended
@@ -15,7 +16,7 @@ router=APIRouter(
 
 
 @router.get('/v1/get/subscriptions', response_model=SubscriptionsListResponse, tags=["payment"])
-def get_subscriptions(page: int = Query(1, ge=1), db: Session = Depends(get_db)):
+def get_subscriptions(page: int = Query(1, ge=1), db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     per_page = 20
     total_items = db.query(Subscription).count()
     total_pages = max((total_items + per_page - 1) // per_page, 1)
@@ -77,7 +78,7 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post('/setup',response_model=None)
-def add_payment_config(payment:PaymentConfigRequest,db:Session = Depends(get_db)):
+def add_payment_config(payment:PaymentConfigRequest,db:Session = Depends(get_db), _: dict = Depends(verify_token)):
     routerId = payment.router_id
     user = payment.user
     passwd= payment.password 
@@ -121,7 +122,7 @@ def add_payment_config(payment:PaymentConfigRequest,db:Session = Depends(get_db)
 #         # print("Missing issue")
 #         return GeneralResponse(message="Error in payment request",success=False,code=400)
 @router.post('/order/{id}', response_model=GeneralResponse)
-def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)):
+def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     phone = detail.phone
     stk_response=None
     try:
