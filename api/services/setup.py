@@ -176,7 +176,8 @@ def discover_via_mndp(timeout=5):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     try:
         sock.bind(("", MNDP_PORT))
-    except OSError:
+    except OSError as e:
+        logger.warning("MNDP: could not bind port %d: %s", MNDP_PORT, e)
         sock.close()
         return []
 
