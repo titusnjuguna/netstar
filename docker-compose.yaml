@@ -4,13 +4,13 @@ services:
   web:
     build: .
     container_name: fastapi_app
-    ports:
-      - "127.0.0.1:8070:8070"
+    network_mode: "host"
     volumes:
       - .:/app
     environment:
-      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
       - SECRET_KEY=${SECRET_KEY}
+      - API_BASE_URL=${API_BASE_URL}
     depends_on:
       - db
     command: uvicorn main:app --host 0.0.0.0 --port 8070
@@ -27,3 +27,4 @@ services:
 
 volumes:
   postgres_data:
+    external: true
