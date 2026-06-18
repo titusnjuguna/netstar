@@ -1,9 +1,12 @@
 # router_config.py
 import os
+import uuid
 import socket
 import select
+import struct
 import time
 import ftplib
+import concurrent.futures
 from io import BytesIO
 
 from routeros_api import RouterOsApiPool
@@ -139,9 +142,6 @@ _MIKROTIK_OUI_PREFIXES = (
     "B8:69:F4", "CC:2D:E0", "D4:CA:6D", "E4:8D:8C", "DC:2C:6E", "2C:C8:1B",
 )
 
-# Best-effort TLV type map for MikroTik Neighbor Discovery Protocol packets.
-# Unknown TLV types are skipped (using their length field), so an incorrect
-# entry here just means that field is left blank - it cannot break parsing.
 _MNDP_TLV_NAMES = {
     0x0001: "mac",
     0x0005: "identity",
@@ -149,6 +149,97 @@ _MNDP_TLV_NAMES = {
     0x0008: "platform",
     0x000C: "board",
 }
+
+
+def _read_local_routes():
+    """
+    Parse /proc/net/route and return (be_network, be_mask) for each
+    directly connected (non-gateway) UP route. Values are big-endian integers
+    suitable for use with socket.inet_ntoa / struct.pack('>I', ...).
+    """
+    routes = []
+    try:
+        with open('/proc/net/route') as f:
+            for line in f.readlines()[1:]:
+                parts = line.split()
+                if len(parts) < 8:
+                    continue
+                flags = int(parts[3], 16)
+                if not (flags & 0x1) or (flags & 0x2):  # skip !UP and gateway routes
+                    continue
+                # /proc/net/route stores addresses as little-endian hex
+                dest_le = int(parts[1], 16)
+                mask_le = int(parts[7], 16)
+                if mask_le == 0:
+                    continue
+                be_dest = struct.unpack('>I', struct.pack('<I', dest_le))[0]
+                be_mask = struct.unpack('>I', struct.pack('<I', mask_le))[0]
+                routes.append((be_dest & be_mask, be_mask))
+    except OSError:
+        pass
+    return routes
+
+
+def _get_local_broadcast_addresses():
+    """Broadcast address for every directly connected subnet, plus the limited broadcast."""
+    addresses = {'255.255.255.255'}
+    for be_net, be_mask in _read_local_routes():
+        be_bcast = be_net | (~be_mask & 0xFFFFFFFF)
+        bcast = socket.inet_ntoa(struct.pack('>I', be_bcast))
+        if bcast not in ('0.0.0.0', '255.255.255.255'):
+            addresses.add(bcast)
+    return addresses
+
+
+def _get_local_subnet_hosts():
+    """All host addresses in directly connected subnets (clamped to /24 max)."""
+    hosts = []
+    for be_net, be_mask in _read_local_routes():
+        prefix = bin(be_mask).count('1')
+        if prefix < 24:
+            be_mask = 0xFFFFFF00
+            be_net = be_net & be_mask
+        host_count = (~be_mask) & 0xFFFFFFFF  # e.g. 255 for /24
+        for i in range(1, host_count):
+            hosts.append(socket.inet_ntoa(struct.pack('>I', be_net | i)))
+    return hosts
+
+
+def _check_mikrotik_port(ip, timeout=0.5):
+    for port in (8728, 8291):
+        try:
+            with socket.create_connection((ip, port), timeout=timeout):
+                return {
+                    "ipAddress": ip,
+                    "mac": None,
+                    "identity": None,
+                    "platform": "MikroTik",
+                    "board": None,
+                    "version": None,
+                    "method": "port-scan",
+                }
+        except OSError:
+            continue
+    return None
+
+
+def discover_via_port_scan(timeout=5):
+    """Parallel TCP scan of local subnets for MikroTik API (8728) or Winbox (8291)."""
+    candidates = _get_local_subnet_hosts()
+    if not candidates:
+        return []
+    found = {}
+    per_host = max(0.3, min(1.0, timeout / 2))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(64, len(candidates))) as ex:
+        futures = {ex.submit(_check_mikrotik_port, ip, per_host): ip for ip in candidates}
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=timeout):
+                result = future.result()
+                if result:
+                    found[result['ipAddress']] = result
+        except concurrent.futures.TimeoutError:
+            pass
+    return list(found.values())
 
 
 def _parse_mndp_packet(data):
@@ -174,6 +265,7 @@ def discover_via_mndp(timeout=5):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    print(f"Listening for MNDP broadcasts on UDP port {MNDP_PORT} for {timeout} seconds...")
     try:
         sock.bind(("", MNDP_PORT))
     except OSError as e:
@@ -181,10 +273,11 @@ def discover_via_mndp(timeout=5):
         sock.close()
         return []
 
-    try:
-        sock.sendto(b"\x00\x00\x00\x00", ("255.255.255.255", MNDP_PORT))
-    except OSError:
-        pass
+    for bcast in _get_local_broadcast_addresses():
+        try:
+            sock.sendto(b"\x00\x00\x00\x00", (bcast, MNDP_PORT))
+        except OSError:
+            pass
 
     end_time = time.monotonic() + timeout
     while True:
@@ -264,8 +357,13 @@ def probe_default_router(host="192.168.88.1"):
 
 def discover_routers(timeout=5):
     found = {}
-    for device in discover_via_mndp(timeout=timeout):
-        found[device["ipAddress"]] = device
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        mndp_f = ex.submit(discover_via_mndp, timeout)
+        scan_f = ex.submit(discover_via_port_scan, timeout)
+        for device in mndp_f.result():
+            found[device["ipAddress"]] = device
+        for device in scan_f.result():
+            found.setdefault(device["ipAddress"], device)
     for device in discover_via_arp():
         found.setdefault(device["ipAddress"], device)
     default = probe_default_router()
@@ -318,10 +416,42 @@ def set_speed_limit(download_speed: int, upload_speed: int,router_id:int,db:any)
     upload_speed_kbps = upload_speed * 1024
     try:
         connection = connect(username=username, password=password,host=ip_address)
-        connection('/queue/simple/add', 
+        connection('/queue/simple/add',
                name=f"Limit_{username}",
-               target=f"{username}",  # You can use IP address or username depending on the router config
+               target=f"{username}",
                maxlimit=f"{download_speed_kbps}k/{upload_speed_kbps}k",
                priority=8)
     except Exception as e:
         return f'error occured {e}'
+
+
+def generate_reg_token() -> str:
+    """Generate a unique registration token for a router."""
+    return uuid.uuid4().hex  # 32-char hex string, e.g. 'a3f1c2d4...'
+
+
+def generate_ros_script(reg_token: str, server_url: str) -> str:
+    """
+    Return a RouterOS script the customer pastes into their MikroTik scheduler.
+
+    What it does:
+      - Runs on every reboot
+      - Sends the reg_token + router identity/board/version to the VPS
+      - VPS uses this to confirm the router is online and record its public IP
+
+    How to install on MikroTik:
+      System > Scheduler > Add
+        Name: netstar-register
+        Start Time: startup
+        Interval: 00:00:00  (run once on boot)
+        On Event: <paste the script here>
+    """
+    register_url = f"{server_url}/api/v1/register-router"
+    return f"""\
+:local regToken "{reg_token}"
+:local serverUrl "{register_url}"
+:local identity [/system identity get name]
+:local board [/system resource get board-name]
+:local version [/system resource get version]
+:local data ("token=" . $regToken . "&identity=" . $identity . "&board=" . $board . "&version=" . $version)
+/tool fetch url=$serverUrl http-method=post http-data=$data output=none"""

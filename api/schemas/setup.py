@@ -105,3 +105,14 @@ class ProductDetailResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class RouterRegistrationResponse(BaseModel):
+    message: str
+    routerId: int
+    identity: str
+
+
+class RegistrationScriptResponse(BaseModel):
+    regToken: str
+    script: str

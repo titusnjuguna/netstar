@@ -1,13 +1,24 @@
 import json
-from fastapi import APIRouter,Depends,HTTPException,Query
+from datetime import datetime
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from api.services.setup import check_mikrotik_status,get_router_live_stats,render_captive_portal_html,deploy_captive_portal,discover_routers,API_BASE_URL
+from api.services.setup import (
+    check_mikrotik_status, get_router_live_stats, render_captive_portal_html,
+    deploy_captive_portal, discover_routers,
+    generate_reg_token, generate_ros_script,
+)
 from api.services.payment import stk_push_request
-from api.schemas.setup import RouterCreate,RouterResponse,RouterDetail,RouterOut,RoutersListResponse,RouterPingResponse,RouterFullCreate,HotspotPayRequest,DiscoveredRouter,DiscoverRoutersResponse,ProductCreate,ProductOut,ProductsListResponse,ProductDetailResponse,MessageResponse
+from api.schemas.setup import (
+    RouterCreate, RouterResponse, RouterDetail, RouterOut, RoutersListResponse,
+    RouterPingResponse, RouterFullCreate, HotspotPayRequest, DiscoveredRouter,
+    DiscoverRoutersResponse, ProductCreate, ProductOut, ProductsListResponse,
+    ProductDetailResponse, MessageResponse,
+    RouterRegistrationResponse, RegistrationScriptResponse,
+)
 from api.schemas.payment import GeneralResponse
 from sqlalchemy.orm import Session
-from api.db.session import get_db,SessionLocal
-from api.models.setup import RouterInfo,Products
+from api.db.session import get_db, SessionLocal
+from api.models.setup import RouterInfo, Products
 from api.services.auth import verify_token
 from sqlalchemy.sql import desc
 
@@ -53,6 +64,7 @@ def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token))
                 hotspot_name=routerInfo.hotspotName,
                 till_number=routerInfo.tillNumber,
                 port=8728,
+                reg_token=generate_reg_token(),
             )
             try:
                 db.add(new_router)
@@ -254,3 +266,68 @@ def get_all_products(db: Session = Depends(get_db)):
     ]
     return ProductsListResponse(message="Products fetched successfully", products=product_responses)
 
+
+# ---------------------------------------------------------------------------
+# Self-registration endpoints (called by MikroTik RouterOS scripts)
+# ---------------------------------------------------------------------------
+
+@router.post("/v1/register-router", response_model=RouterRegistrationResponse)
+def register_router(
+    request: Request,
+    token: str = Form(...),
+    identity: str = Form(""),
+    board: str = Form(""),
+    version: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """
+    Called by the MikroTik scheduler script on every reboot.
+    No login required — the reg_token IS the authentication.
+
+    What happens here:
+      1. Find the router in the DB using the token
+      2. Record the public IP the request came from (request.client.host)
+         — this is how the VPS always knows the router's current public IP
+      3. Update last_seen so the dashboard can show "online / last seen X"
+    """
+    db_router = db.query(RouterInfo).filter(RouterInfo.reg_token == token).first()
+    if not db_router:
+        raise HTTPException(status_code=404, detail="Unknown registration token")
+
+    db_router.public_ip = request.client.host
+    db_router.last_seen = datetime.utcnow()
+    if identity:
+        db_router.name = identity
+    db.commit()
+
+    return RouterRegistrationResponse(
+        message="Router registered successfully",
+        routerId=db_router.id,
+        identity=identity or db_router.name or "",
+    )
+
+
+@router.get("/v1/router/{id}/registration-script", response_model=RegistrationScriptResponse)
+def get_registration_script(
+    id: int,
+    db: Session = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """
+    Returns the RouterOS script the admin copies and pastes into the
+    MikroTik's System > Scheduler.
+
+    The script contains the router's unique reg_token so only that
+    specific router can call home with it.
+    """
+    from api.services.setup import API_BASE_URL
+    db_router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
+    if not db_router:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    if not db_router.reg_token:
+        db_router.reg_token = generate_reg_token()
+        db.commit()
+
+    script = generate_ros_script(db_router.reg_token, API_BASE_URL)
+    return RegistrationScriptResponse(regToken=db_router.reg_token, script=script)
