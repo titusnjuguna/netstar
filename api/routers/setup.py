@@ -54,7 +54,23 @@ def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token))
             return f"{json.dumps({'step': step, 'status': status, 'message': message, **extra})}\n\n"
 
         db = SessionLocal()
+        new_router = None
         try:
+            # Step 1: verify the MikroTik is reachable — nothing touches the DB yet
+            yield sse("connect", "in_progress", "Connecting to MikroTik device...")
+            stats = get_router_live_stats(
+                host=routerInfo.ipAddress,
+                username=routerInfo.username,
+                password=routerInfo.password,
+                port=8728,
+            )
+            if stats["status"] != "online":
+                yield sse("connect", "failed", "Could not reach MikroTik — check IP address and credentials")
+                return
+            yield sse("connect", "done", "Connected to MikroTik device",
+                      cpuLoad=stats["cpuLoad"], memoryUsage=stats["memoryUsage"], uptime=stats["uptime"])
+
+            # Step 2: save to DB so we get the router ID needed for the captive portal payment URL
             yield sse("save", "in_progress", "Saving router configuration...")
             new_router = RouterInfo(
                 name=routerInfo.name,
@@ -74,29 +90,31 @@ def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token))
                 db.rollback()
                 yield sse("save", "failed", f"Failed to save router: {e}")
                 return
-            router_id = f"r{new_router.id}"
-            yield sse("save", "done", "Router configuration saved", routerId=router_id)
 
-            yield sse("connect", "in_progress", "Connecting to MikroTik device...")
-            stats = get_router_live_stats(host=new_router.ip_address, username=new_router.user_name,
-                                           password=new_router.password, port=new_router.port)
-            if stats["status"] == "online":
-                yield sse("connect", "done", "Connected to MikroTik device", cpuLoad=stats["cpuLoad"],
-                          memoryUsage=stats["memoryUsage"], uptime=stats["uptime"])
-            else:
-                yield sse("connect", "failed", "Could not reach MikroTik device - check IP address and credentials")
-
+            # Step 3: deploy captive portal using the real router ID
             yield sse("portal", "in_progress", "Deploying captive portal page...")
             html_content = render_captive_portal_html(
                 hotspot_name=new_router.hotspot_name,
                 router_id=new_router.id,
                 till_number=new_router.till_number,
             )
-            success, message = deploy_captive_portal(host=new_router.ip_address, username=new_router.user_name,
-                                                       password=new_router.password, html_content=html_content)
-            yield sse("portal", "done" if success else "failed", message)
+            portal_ok, portal_msg = deploy_captive_portal(
+                host=new_router.ip_address,
+                username=new_router.user_name,
+                password=new_router.password,
+                html_content=html_content,
+            )
+            if not portal_ok:
+                # Portal failed — roll back the DB save so no partial record is left
+                db.delete(new_router)
+                db.commit()
+                new_router = None
+                yield sse("portal", "failed", portal_msg)
+                return
+            yield sse("portal", "done", portal_msg)
 
-            yield sse("complete", "done", "Router setup complete", routerId=router_id, routerStatus=stats["status"])
+            router_id = f"r{new_router.id}"
+            yield sse("complete", "done", "Router setup complete", routerId=router_id, routerStatus="online")
         finally:
             db.close()
 
