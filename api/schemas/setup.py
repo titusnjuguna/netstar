@@ -41,6 +41,10 @@ class RouterOut(BaseModel):
     memoryUsage: int
     uptime: str
     activeUsers: int
+    hotspotName: str
+    tillNumber: str
+    createdAt: datetime
+    routerUUID: str
 
 
 class RoutersListResponse(BaseModel):
@@ -100,6 +104,8 @@ class ProductsListResponse(BaseModel):
 
 class ProductDetailResponse(BaseModel):
     message: str
+    name: str
+    location: str
     product: ProductOut
 
 

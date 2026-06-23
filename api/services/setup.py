@@ -102,9 +102,11 @@ def get_router_live_stats(host, username, password, port):
             "memoryUsage": memory_usage,
             "uptime": format_uptime(info.get('uptime', '')),
             "activeUsers": len(active),
+            "error": None,
         }
-    except Exception:
-        return {"status": "offline", "cpuLoad": 0, "memoryUsage": 0, "uptime": "0d 0h 0m", "activeUsers": 0}
+    except Exception as e:
+        logger.warning("Could not connect to MikroTik at %s:%s — %s", host, port, e)
+        return {"status": "offline", "cpuLoad": 0, "memoryUsage": 0, "uptime": "0d 0h 0m", "activeUsers": 0, "error": str(e)}
 
 
 def render_captive_portal_html(hotspot_name, router_id, till_number, api_base_url=API_BASE_URL):
@@ -427,7 +429,7 @@ def set_speed_limit(download_speed: int, upload_speed: int,router_id:int,db:any)
 
 def generate_reg_token() -> str:
     """Generate a unique registration token for a router."""
-    return uuid.uuid4().hex  # 32-char hex string, e.g. 'a3f1c2d4...'
+    return uuid.uuid4().hex 
 
 
 def generate_ros_script(reg_token: str, server_url: str) -> str:

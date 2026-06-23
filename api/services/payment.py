@@ -1,3 +1,6 @@
+import os
+
+from dotenv import load_dotenv
 import requests
 from api.models.payment import PaymentConfig 
 from sqlalchemy.orm import Session
@@ -8,6 +11,9 @@ from datetime import datetime
 import secrets
 import string
 from requests.auth import HTTPBasicAuth
+#get the .env variables
+
+load_dotenv()
 
 def generate_secure_random_string(length):
     characters = string.ascii_letters + string.digits
@@ -18,26 +24,22 @@ def mpesa_authentication(till_number,db):
     merchant = int(till_number)
     config = db.query(PaymentConfig).filter(PaymentConfig.merchant==merchant).first()
     if config:
-        # user = config.consumer_key
-        # passwrd = config.consumer_secret
         consumer_key= config.consumer_key
         consumer_secret= config.consumer_secret
         credentials = f"{consumer_key}:{consumer_secret}"
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
-        url = 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
-        # auth=HTTPBasicAuth(user,passwrd)
+        url = os.getenv("MPESA_AUTH_URL")
         response = requests.request("GET", url,headers = { 'Authorization': f'Basic {encoded_credentials}'})
-        # print(response.text.encode('utf8'))
         return response.text.encode('utf8')
     else:
         return None 
+    
 def stk_push_request(amount,phone,till_number,db):
     token=mpesa_authentication(db=db,till_number=till_number)
-    print(token)
     session_ref= generate_secure_random_string(length=10)
     timestamp= datetime.now().strftime('%Y%m%d%H%M%S')
-    passkey= "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"
-    password = str(till_number) + passkey + timestamp
+    passkey= os.getenv("MPESA_PASSKEY")
+    password = f"{till_number}{passkey}{timestamp}"
     encoded_credentials = base64.b64encode(password.encode('utf-8')).decode('utf-8')
     headers = {'Content-Type': 'application/json','Authorization': f"'Bearer {token}'"}
 
@@ -50,12 +52,12 @@ def stk_push_request(amount,phone,till_number,db):
         "PartyA":phone,    
         "PartyB": till_number,    
         "PhoneNumber": phone,    
-        "CallBackURL": "https://test.staging.test.naiverah.com/payment/callback",    
+        "CallBackURL": os.getenv("CALLBACK_URL"),    
         "AccountReference": f'Session:{session_ref}',    
         "TransactionDesc":f"Payment for hotspot {phone}"
         }
-    response = requests.request("POST", 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',headers = headers, data = payload)
-    # print(response.text.encode('utf8'))
+    stk_push_url = os.getenv("STK_PUSH_URL")
+    response = requests.request("POST",stk_push_url,headers = headers, data = payload)
     return response.text.encode('utf8')
 
 

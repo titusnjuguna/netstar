@@ -52,11 +52,9 @@ def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token))
     def event_stream():
         def sse(step, status, message, **extra):
             return f"{json.dumps({'step': step, 'status': status, 'message': message, **extra})}\n\n"
-
         db = SessionLocal()
         new_router = None
         try:
-            # Step 1: verify the MikroTik is reachable — nothing touches the DB yet
             yield sse("connect", "in_progress", "Connecting to MikroTik device...")
             stats = get_router_live_stats(
                 host=routerInfo.ipAddress,
@@ -65,7 +63,8 @@ def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token))
                 port=8728,
             )
             if stats["status"] != "online":
-                yield sse("connect", "failed", "Could not reach MikroTik — check IP address and credentials")
+                reason = stats.get("error") or "check IP address and credentials"
+                yield sse("connect", "failed", f"Could not reach MikroTik — {reason}")
                 return
             yield sse("connect", "done", "Connected to MikroTik device",
                       cpuLoad=stats["cpuLoad"], memoryUsage=stats["memoryUsage"], uptime=stats["uptime"])
@@ -120,10 +119,12 @@ def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token))
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
+#initiate stk push request
+#exclude from auth verification since this is called by the router script
 
 @router.post("/hotspot/pay/{router_id}", response_model=GeneralResponse)
 def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depends(get_db)):
-    db_router = db.query(RouterInfo).filter(RouterInfo.id == router_id).first()
+    db_router = db.query(RouterInfo).filter(RouterInfo.reg_token== router_id).first()
     if not db_router:
         return GeneralResponse(message="Router not found", success=False, code=404)
     if not db_router.till_number:
@@ -149,7 +150,7 @@ def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_toke
     for r in routers:
         stats = get_router_live_stats(host=r.ip_address, username=r.user_name, password=r.password, port=r.port)
         router_responses.append(RouterOut(
-            id=f"r{r.id}",
+            id=r.id,
             name=r.name or "",
             ipAddress=r.ip_address,
             port=r.port or 8728,
@@ -158,7 +159,11 @@ def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_toke
             cpuLoad=stats["cpuLoad"],
             memoryUsage=stats["memoryUsage"],
             uptime=stats["uptime"],
-            activeUsers=stats["activeUsers"],
+            hotspotName=r.hotspot_name or "",
+            tillNumber=r.till_number or "",
+            createdAt=r.last_seen,
+            routerUUID=r.reg_token or "",
+            activeUsers=stats["activeUsers"]
         ))
     return RoutersListResponse(message="Routers fetched successfully", routers=router_responses)
 
@@ -214,12 +219,15 @@ def create_products(product: ProductCreate, db: Session = Depends(get_db), _: di
         duration=product.duration,
         speed_limit=product.speedLimit,
         data_limit=product.dataLimit,
+        router_id=product.routerId
     )
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
     return ProductDetailResponse(
         message="Product created successfully",
+        name = new_product.router.name if new_product.router else "Unknown",
+        location = new_product.router.location if new_product.router else "Unknown",
         product=ProductOut(
             id=str(new_product.id),
             name=new_product.name,
@@ -246,6 +254,8 @@ def update_product(id: int, product: ProductCreate, db: Session = Depends(get_db
     db.refresh(db_product)
     return ProductDetailResponse(
         message="Product updated successfully",
+        name = db_product.router.name if db_product.router else "Unknown",
+        location = db_product.router.location if db_product.router else "Unknown",
         product=ProductOut(
             id=str(db_product.id),
             name=db_product.name,
@@ -268,8 +278,17 @@ def delete_product(id: int, db: Session = Depends(get_db), _: dict = Depends(ver
     return MessageResponse(message="Product deleted successfully")
 
 @router.get("/v1/get/products", response_model=ProductsListResponse)
-def get_all_products(db: Session = Depends(get_db)):
-    products = db.query(Products).order_by(desc(Products.id)).all()
+def get_all_products(
+    db: Session = Depends(get_db),
+    host: str = Query(None, description="Filter products by router IP address"),
+):
+    query = db.query(Products).order_by(desc(Products.id))
+    if host:
+        router = db.query(RouterInfo).filter(RouterInfo.hostname == host).first()
+        if not router:
+            return ProductsListResponse(message=f"No router found with hostname {host}", products=[])
+        query = query.filter(Products.router_id == router.id)
+    products = query.all()
     product_responses = [
         ProductOut(
             id=str(p.id),
@@ -279,15 +298,13 @@ def get_all_products(db: Session = Depends(get_db)):
             speedLimit=p.speed_limit,
             dataLimit=p.data_limit or "Unlimited",
             createdAt=p.created_at,
+            routerId=str(p.router_id) if p.router_id else 1,
         )
         for p in products
     ]
     return ProductsListResponse(message="Products fetched successfully", products=product_responses)
 
 
-# ---------------------------------------------------------------------------
-# Self-registration endpoints (called by MikroTik RouterOS scripts)
-# ---------------------------------------------------------------------------
 
 @router.post("/v1/register-router", response_model=RouterRegistrationResponse)
 def register_router(

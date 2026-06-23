@@ -15,18 +15,22 @@ class RouterInfo(Base):
     port = Column(Integer, default=8728)
     hotspot_name = Column(String)
     till_number = Column(String)
+    hostname = Column(String)
     created_at = Column(DateTime,default=datetime.utcnow)
-    # Self-registration fields — populated when the MikroTik calls home
     reg_token = Column(String, unique=True, nullable=True)
     public_ip = Column(String, nullable=True)   # IP the VPS sees the router coming from
     last_seen = Column(DateTime, nullable=True)  # last time the router called home
+    products = relationship("Products", backref="router")
+
 
 class Products(Base):
     __tablename__= "products"
     id = Column(Integer,primary_key=True,index=True)
     name = Column(String)
     price = Column(Integer)
-    duration = Column(Integer)  # validity period in hours
+    duration = Column(Integer)  
     speed_limit = Column(String)
     data_limit = Column(String, default="Unlimited")
+    router_id = Column(Integer, ForeignKey('routers.id'))
+    router = relationship("RouterInfo", backref="products")
     created_at = Column(DateTime, default=datetime.utcnow)
