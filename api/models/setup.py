@@ -20,15 +20,12 @@ class RouterInfo(Base):
     reg_token = Column(String, unique=True, nullable=True)
     public_ip = Column(String, nullable=True)   # IP the VPS sees the router coming from
     last_seen = Column(DateTime, nullable=True)  # last time the router called home
-    products = relationship("Products", backref="router")
-
-
 class Products(Base):
     __tablename__= "products"
     id = Column(Integer,primary_key=True,index=True)
     name = Column(String)
     price = Column(Integer)
-    duration = Column(Integer)  
+    duration = Column(Integer)
     speed_limit = Column(String)
     data_limit = Column(String, default="Unlimited")
     router_id = Column(Integer, ForeignKey('routers.id'))
