@@ -31,7 +31,7 @@ class RouterDetail(BaseModel):
 
 
 class RouterOut(BaseModel):
-    id: str
+    id: int
     name: str
     ipAddress: str
     port: int
@@ -95,7 +95,7 @@ class ProductCreate(BaseModel):
     duration: int
     speedLimit: str
     dataLimit: str = "Unlimited"
-    routerId: str
+    routerId: int
 
 
 class ProductsListResponse(BaseModel):
