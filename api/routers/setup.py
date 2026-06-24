@@ -227,7 +227,7 @@ def create_products(product: ProductCreate, db: Session = Depends(get_db), _: di
     return ProductDetailResponse(
         message="Product created successfully",
         name = new_product.router.name if new_product.router else "Unknown",
-        location = new_product.router.location if new_product.router else "Unknown",
+        location = (new_product.router.location or "") if new_product.router else "",
         product=ProductOut(
             id=str(new_product.id),
             name=new_product.name,

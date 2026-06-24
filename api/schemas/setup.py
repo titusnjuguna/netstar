@@ -106,7 +106,7 @@ class ProductsListResponse(BaseModel):
 class ProductDetailResponse(BaseModel):
     message: str
     name: str
-    location: str
+    location: Optional[str] = None
     product: ProductOut
 
 
