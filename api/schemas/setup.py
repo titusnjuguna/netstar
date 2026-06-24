@@ -18,6 +18,7 @@ class ProductOut(BaseModel):
     speedLimit: str
     dataLimit: str
     createdAt: datetime
+    routerId: int
 
 
 class RouterResponse(BaseModel):
