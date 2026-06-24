@@ -150,7 +150,7 @@ def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_toke
     for r in routers:
         stats = get_router_live_stats(host=r.ip_address, username=r.user_name, password=r.password, port=r.port)
         router_responses.append(RouterOut(
-            id=r.id,
+            id=f"r{r.id}",
             name=r.name or "",
             ipAddress=r.ip_address,
             port=r.port or 8728,
