@@ -95,6 +95,7 @@ class ProductCreate(BaseModel):
     duration: int
     speedLimit: str
     dataLimit: str = "Unlimited"
+    routerId: str
 
 
 class ProductsListResponse(BaseModel):
