@@ -392,7 +392,6 @@ def generate_mikrotik_setup_script(
  
     return SetupScriptResponse(
         router_id=new_router.id,
-        router_id = 1,
         tunnel_ip=tunnel_ip,
         registration_token=registration_token,
         script=script,
