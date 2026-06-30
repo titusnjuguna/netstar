@@ -1,4 +1,3 @@
-# router_config.py
 import os
 import uuid
 import socket
@@ -17,14 +16,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.models.setup import RouterInfo
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.exc import IntegrityError
+from fastapi import  HTTPException
 from routeros_api import RouterOsApiPool, exceptions
 from librouteros import connect
 from jinja2 import Environment, FileSystemLoader
 import os
 from dotenv import load_dotenv
-from sqlalchemy import Column, DateTime, Integer, String, select
+from sqlalchemy import  select
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -750,10 +748,7 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 # ---- 12. Register this router with the platform ----
 :put "Step 12: Registering with platform..."
 :local myPublicKey [/interface wireguard get [find name=wg-hub] public-key]
-:local payload ("{\\"token\\":\\"" . $regToken . "\\",\\"public_key\\":\\"" . $myPublicKey . "\\"}")
-:local result [/tool fetch url=$registerUrl http-method=post \\
-  http-header-field="Content-Type: application/json" \\
-  http-data=$payload output=user as-value]
+
  
 :put ""
 :put "============================================================"
@@ -770,7 +765,10 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :put ""
 :put "------------------------------------------------------------"
 """
- 
+#  :local payload ("{\\"token\\":\\"" . $regToken . "\\",\\"public_key\\":\\"" . $myPublicKey . "\\"}")
+# :local result [/tool fetch url=$registerUrl http-method=post \\
+#   http-header-field="Content-Type: application/json" \\
+#   http-data=$payload output=user as-value]
  
 def render_setup_script(
     router_id: int,
