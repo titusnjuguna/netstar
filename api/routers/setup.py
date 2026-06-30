@@ -386,12 +386,12 @@ def generate_mikrotik_setup_script(
         wan_interface="ether1",
         hostname=hostname
     )
-    # db.add(new_router)
-    # db.commit()
-    # db.refresh(new_router)
+    db.add(new_router)
+    db.commit()
+    db.refresh(new_router)
  
     return SetupScriptResponse(
-        # router_id=new_router.id,
+        router_id=new_router.id,
         router_id = 1,
         tunnel_ip=tunnel_ip,
         registration_token=registration_token,
