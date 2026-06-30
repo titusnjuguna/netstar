@@ -787,7 +787,7 @@ def render_setup_script(
         "@@HOTSPOT_NAME@@": req.hotspot_name,
         "@@HOTSPOT_DNS_NAME@@": hostname,
         "@@WAN_INTERFACE@@": wan_interface,
-        "@@WIFI_COUNTRY@@": "Kenya",
+        "@@WIFI_COUNTRY@@": "kenya",
         "@@API_USERNAME@@": api_username,
         "@@API_PASSWORD@@": api_password,
         "@@TUNNEL_IP@@": tunnel_ip,
