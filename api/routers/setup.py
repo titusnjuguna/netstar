@@ -1,54 +1,28 @@
 import json
-from datetime import datetime
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from datetime import datetime,timezone
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from api.services.setup import (
-    check_mikrotik_status, get_router_live_stats, render_captive_portal_html,
-    deploy_captive_portal, discover_routers,
-    generate_reg_token, generate_ros_script,
-)
+from api.services.setup import * 
 from api.services.payment import stk_push_request
-from api.schemas.setup import (
-    RouterCreate, RouterResponse, RouterDetail, RouterOut, RoutersListResponse,
-    RouterPingResponse, RouterFullCreate, HotspotPayRequest, DiscoveredRouter,
-    DiscoverRoutersResponse, ProductCreate, ProductOut, ProductsListResponse,
-    ProductDetailResponse, MessageResponse,
-    RouterRegistrationResponse, RegistrationScriptResponse,
-)
+from api.schemas.setup import * 
 from api.schemas.payment import GeneralResponse
 from sqlalchemy.orm import Session
 from api.db.session import get_db, SessionLocal
 from api.models.setup import RouterInfo, Products
 from api.services.auth import verify_token
 from sqlalchemy.sql import desc
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import Column, DateTime, Integer, String,select
+from sqlalchemy.orm import Session, declarative_base
 
-router=APIRouter(
-    prefix="/api",  # Optional but recommended
-    tags=["Setup"]
-)
+router=APIRouter(prefix="/api",tags=["Router and Other Setup"])
 
-@router.post("/add/router", response_model=RouterResponse)
-def set_router(routerInfo: RouterCreate, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
-    try:
-        new_router = RouterInfo(
-        name=routerInfo.name,
-        ip_address=routerInfo.ip_address,
-        password=routerInfo.password,
-        user_name=routerInfo.username,
-        location = routerInfo.location,
-        port=routerInfo.port,
-        )
-        db.add(new_router)
-        db.commit()
-        db.refresh(new_router)
-        return RouterResponse(success=True, msg="Router successfully added.")
-    except Exception as e:
-        # Handle errors and return failure response
-        return RouterResponse(success=False, msg=f"Error: {str(e)}")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LOGIN_HTML_PATH = os.path.join(PROJECT_ROOT, "login.html")
 
 
 @router.post("/v1/create/router")
-def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token)):
+def create_router(routerInfo: RouterCreate, _: dict = Depends(verify_token)):
     def event_stream():
         def sse(step, status, message, **extra):
             return f"{json.dumps({'step': step, 'status': status, 'message': message, **extra})}\n\n"
@@ -57,10 +31,10 @@ def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token))
         try:
             yield sse("connect", "in_progress", "Connecting to MikroTik device...")
             stats = get_router_live_stats(
-                host=routerInfo.ipAddress,
+                host=routerInfo.ip_address,
                 username=routerInfo.username,
                 password=routerInfo.password,
-                port=8728,
+                port=routerInfo.port,
             )
             if stats["status"] != "online":
                 reason = stats.get("error") or "check IP address and credentials"
@@ -73,13 +47,15 @@ def create_router(routerInfo: RouterFullCreate, _: dict = Depends(verify_token))
             yield sse("save", "in_progress", "Saving router configuration...")
             new_router = RouterInfo(
                 name=routerInfo.name,
-                ip_address=routerInfo.ipAddress,
+                ip_address=routerInfo.ip_address,
                 user_name=routerInfo.username,
                 password=routerInfo.password,
-                hotspot_name=routerInfo.hotspotName,
-                till_number=routerInfo.tillNumber,
-                port=8728,
+                hotspot_name=routerInfo.hotspot_name,
+                till_number=routerInfo.till_number,
+                location=routerInfo.location,
+                port=routerInfo.port,
                 reg_token=generate_reg_token(),
+                hostname=f'{routerInfo.hotspot_name.strip().lower()}.babybull.cc'
             )
             try:
                 db.add(new_router)
@@ -133,7 +109,7 @@ def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depend
         product_id = int(payload.productId)
     except ValueError:
         return GeneralResponse(message="Invalid package selected", success=False, code=400)
-    product = db.query(Products).filter(Products.id == product_id).first()
+    product = db.query(Products).filter(Products.id == HotspotPayRequest.productId).first()
     if not product:
         return GeneralResponse(message="Package not found", success=False, code=404)
     try:
@@ -213,14 +189,22 @@ def check_get_device_resource(id: int, db: Session = Depends(get_db), _: dict = 
 
 @router.post("/v1/create/product", response_model=ProductDetailResponse)
 def create_products(product: ProductCreate, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    #check duration is greater than 1 if less convert to minutes and store in db
+    if product.duration >= 1:
+        new_duration = float(product.duration) * 60
     new_product = Products(
         name=product.name,
         price=product.price,
-        duration=product.duration,
+        duration = new_duration,
         speed_limit=product.speedLimit,
         data_limit=product.dataLimit,
         router_id=product.routerId
     )
+    router = db.query(RouterInfo).filter(RouterInfo.id == product.routerId).first()
+    if not router:
+        raise HTTPException(status_code=404,detail="Router not found")
+    background_tasks = BackgroundTasks()
+    background_tasks.add_task(match_product_to_profile,router,new_duration)
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
@@ -366,3 +350,150 @@ def get_registration_script(
 
     script = generate_ros_script(db_router.reg_token, API_BASE_URL)
     return RegistrationScriptResponse(regToken=db_router.reg_token, script=script)
+
+
+
+@router.post("/v1/generate/setup-script", response_model=SetupScriptResponse)
+def generate_mikrotik_setup_script(
+    req: RouterCreate,
+    db: Session = Depends(get_db),
+):
+    tunnel_ip = allocate_tunnel_ip(db)
+    api_username = req.username
+    api_password = req.password
+    registration_token = generate_reg_token()
+    hostname = f'{req.hotspot_name}.wifi.babybull.cc'
+    new_router = RouterInfo(
+        hotspot_name=req.hotspot_name,
+        ip_address = req.ip_address,
+        tunnel_ip=tunnel_ip,
+        user_name=api_username,
+        password=api_password,
+        reg_token=registration_token,
+        till_number = req.till_number,
+        hostname = hostname
+    )
+  
+ 
+ 
+    script = render_setup_script(
+        router_id=new_router.id,
+        req=req,
+        tunnel_ip=tunnel_ip,
+        api_username=api_username,
+        api_password=api_password,
+        registration_token=registration_token,
+        wan_interface="ether1",
+        hostname=hostname
+    )
+    # db.add(new_router)
+    # db.commit()
+    # db.refresh(new_router)
+ 
+    return SetupScriptResponse(
+        # router_id=new_router.id,
+        router_id = 1,
+        tunnel_ip=tunnel_ip,
+        registration_token=registration_token,
+        script=script,
+    )
+ 
+
+ 
+@router.post("/v1/register/callback", response_model=RegisterCallbackResponse)
+def register_callback(
+    req: RegisterCallbackRequest,
+    db: Session = Depends(get_db),
+):
+    result = db.execute(
+        select(RouterInfo).where(RouterInfo.reg_token == req.token)
+    ).scalar_one_or_none()
+ 
+    if result is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired registration token")
+ 
+    # Idempotent: if it's already active with the same key, just re-confirm
+    # rather than erroring — the router may retry this call on its own.
+    if result.status == "active" and result.wg_public_key != req.public_key:
+        raise HTTPException(
+            status_code=409,
+            detail="This router is already registered with a different key.",
+        )
+ 
+    apply_wireguard_peer(public_key=req.public_key, tunnel_ip=result.tunnel_ip)
+ 
+    result.wg_public_key = req.public_key
+    result.status = "active"
+    result.registered_at = datetime.now(timezone.utc)
+    db.commit()
+ 
+    return RegisterCallbackResponse(
+        status="active",
+        hub_public_key=settings.HUB_PUBLIC_KEY,
+        hub_endpoint_host=settings.HUB_ENDPOINT_HOST,
+        hub_endpoint_port=settings.HUB_ENDPOINT_PORT,
+        assigned_tunnel_ip=result.tunnel_ip,
+    )
+ 
+@router.get("/v1/get/router-ip")
+def get_router_ip_address(db: Session = Depends(get_db)):
+    ipaddress = allocate_tunnel_ip(db)
+    if isinstance(ipaddress, str):
+        return {"ip_address": ipaddress}
+    else:
+        return {"message": "Could not detect router IP"}
+
+
+@router.post("/v1/set/wireguard")
+def set_up_wireguard_router_to_backend(req: WireGuardSet, _: dict = Depends(verify_token)):
+    apply_wireguard_peer(public_key=req.public_key, tunnel_ip=req.ip_address)
+    return {"message": f"WireGuard peer {req.public_key} added with IP {req.ip_address}/32"}
+
+@router.get("/v1/get/wireguard")
+def get_wireguard_backend_to_router(_: dict = Depends(verify_token)):
+    return {
+        "hub_public_key": settings.HUB_PUBLIC_KEY,
+        "hub_endpoint_host": settings.HUB_ENDPOINT_HOST,
+        "hub_endpoint_port": settings.HUB_ENDPOINT_PORT,
+        "script": (
+            f"/interface wireguard peers add interface=wg-backend "
+            f"public-key={settings.HUB_PUBLIC_KEY} "
+            f"endpoint-address={settings.HUB_ENDPOINT_HOST} "
+            f"endpoint-port={settings.HUB_ENDPOINT_PORT} "
+            f"allowed-address=10.200.0.1/32 persistent-keepalive=25s"
+        ),
+    }
+
+
+@router.post("/v1/deploy/login-page/{router_id}")
+def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    db_router = db.query(RouterInfo).filter(RouterInfo.id == router_id).first()
+    if not db_router:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    host = db_router.tunnel_ip or db_router.ip_address
+    if not host:
+        raise HTTPException(status_code=400, detail="Router has no reachable address (tunnel_ip or ip_address)")
+
+    if not os.path.isfile(LOGIN_HTML_PATH):
+        raise HTTPException(status_code=500, detail=f"login.html not found at {LOGIN_HTML_PATH}")
+
+    try:
+        subprocess.run(
+            [
+                "sshpass", "-p", db_router.password,
+                "scp", "-o", "StrictHostKeyChecking=no",
+                LOGIN_HTML_PATH,
+                f"{db_router.user_name}@{host}:hotspot/login.html",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to deploy login page: {exc.stderr or exc}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Timed out connecting to router via scp")
+
+    return {"message": f"login.html deployed to {host}:hotspot/login.html"}

@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 import requests
-from api.models.payment import PaymentConfig 
+from api.models.payment import HotspotPayments, PaymentConfig 
 from sqlalchemy.orm import Session
 from api.db.session import get_db
 from fastapi import Depends
@@ -34,7 +34,7 @@ def mpesa_authentication(till_number,db):
     else:
         return None 
     
-def stk_push_request(amount,phone,till_number,db):
+def stk_push_request(amount,phone,till_number,product_id,db):
     token=mpesa_authentication(db=db,till_number=till_number)
     session_ref= generate_secure_random_string(length=10)
     timestamp= datetime.now().strftime('%Y%m%d%H%M%S')
@@ -58,7 +58,33 @@ def stk_push_request(amount,phone,till_number,db):
         }
     stk_push_url = os.getenv("STK_PUSH_URL")
     response = requests.request("POST",stk_push_url,headers = headers, data = payload)
-    return response.text.encode('utf8')
+    if response.json().get("ResponseCode") == "0":
+        print(f"STK push request sent. Response: {response.text}")
+        #add the payment record to the database
+        CheckoutRequestID = response.json().get("CheckoutRequestID", "")
+        {
+  "MerchantRequestID": "2654-4b64-97ff-b827b542881d3130",
+  "CheckoutRequestID": "ws_CO_1007202409152617172396192",
+  "ResponseCode": "0",
+  "ResponseDescription": "Success. Request accepted for processing",
+  "CustomerMessage": "Success. Request accepted for processing"
+}
+        new_payment = HotspotPayments(
+            amount = amount,
+            payment_date = datetime.utcnow(),
+            phone = phone,
+            transaction_ref = "",
+            product_id = product_id,
+            CheckoutRequestID = CheckoutRequestID,
+            has_been_transferred = False
+        )
+        db.add(new_payment)
+        db.commit()
+        return {"message": "STK push request sent successfully", "details": response.text, "status_code": response.status_code}
+    else:
+        print(f"Error occurred while making STK push request: {response.text}")
+        return {"error": "Failed to initiate STK push request", "details": response.text, "status_code": response.status_code}
+
 
 
 

@@ -37,6 +37,18 @@ class Payment(Base):
     user = relationship("User")
     subscription = relationship("Subscription")
 
+class HotspotPayments(Base):
+    __tablename__ = "hotspot_payments"
+    id = Column(Integer, primary_key=True, index=True)
+    amount = Column(Float)
+    payment_date = Column(DateTime, default=datetime.utcnow)
+    phone = Column(String)
+    transaction_ref = Column(String)
+    product_id = Column(Integer, ForeignKey("products.id"))
+    CheckoutRequestID = Column(String)
+    has_been_transferred = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class PaymentConfig(Base):
     __tablename__ = 'payment_configs'
     id = Column(Integer, primary_key=True, index=True)

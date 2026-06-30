@@ -72,9 +72,34 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     request_object =  await request.body()
     decoded_req_object = request_object.decode('utf-8').replace("'", '"')
     json_data = json.loads(decoded_req_object)
-    with open('TestingHot.json', 'w') as f:
-        json.dump(json_data,f)
+    # with open('TestingHot.json', 'w') as f:
+    #     json.dump(json_data,f)
+    try:
+        db.query(HotspotPayments).filter(HotspotPayments.CheckoutRequestID==json_data['Body']['stkCallback']['CheckoutRequestID']).update({
+        "transaction_ref": json_data['Body']['stkCallback']['CallbackMetadata']['Item'][1]['Value'],
+    })
+    except:
+        db.query(HotspotPayments).filter(HotspotPayments.phone==json_data['Body']['stkCallback']['CallbackMetadata']['Item'][3]['Value']).update({
+            "transaction_ref": json_data['Body']['stkCallback']['CallbackMetadata']['Item'][1]['Value'],
+        })
+    #send whtsapp notification to user,to be added later
+
     return GeneralResponse(message='success',success=True,code=200)
+
+
+@router.get('/hotspot/pay/status/{reference}',response_model=GeneralResponse,tags=["payment"])
+def check_payment_status(reference:str,db:Session = Depends(get_db)):
+    payment = db.query(HotspotPayments).filter(HotspotPayments.CheckoutRequestID==reference).first()
+    if payment:
+        if payment.transaction_ref != None:
+            #add connection to mikrotik and create a user and password for auto login and respond for successfull connection
+            
+            return GeneralResponse(message="Payment successful",success=True,code=200)      
+        else:
+            return GeneralResponse(message="Payment failed",success=False,code=400)
+    else:
+        return GeneralResponse(message="Payment not found",success=False,code=404)
+    
 
 
 @router.post('/setup',response_model=None)

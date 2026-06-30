@@ -6,31 +6,45 @@ import select
 import struct
 import time
 import ftplib
+import string
+import secrets
 import concurrent.futures
 from io import BytesIO
-
-from routeros_api import RouterOsApiPool
-from api.schemas.setup import RouterCreate
+import subprocess
+from api.schemas.setup import *
 from api.db.session import get_db
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends
 from api.models.setup import RouterInfo
 import logging
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from routeros_api import RouterOsApiPool, exceptions
 from librouteros import connect
 from jinja2 import Environment, FileSystemLoader
+import os
+from dotenv import load_dotenv
+from sqlalchemy import Column, DateTime, Integer, String, select
+load_dotenv()
+
 logger = logging.getLogger(__name__)
 
-# Public base URL of this API, embedded in the captive portal page so it can
-# call back into /api/hotspot/pay/{router_id}. Override via env var when deploying.
+
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 _template_env = Environment(
     loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), "..", "templates"))
 )
+class _Settings:
+    WG_INTERFACE = os.environ.get("WG_INTERFACE", "wg0")
+    HUB_PUBLIC_KEY = os.environ.get("HUB_PUBLIC_KEY", "")
+    HUB_ENDPOINT_HOST = os.environ.get("HUB_ENDPOINT_HOST", "")
+    HUB_ENDPOINT_PORT = int(os.environ.get("HUB_ENDPOINT_PORT", "51820"))
+    CALLBACK_BASE_URL = os.environ.get("CALLBACK_BASE_URL", API_BASE_URL)
+    TUNNEL_POOL_FIRST_HOST_OCTET = int(os.environ.get("TUNNEL_POOL_FIRST_HOST_OCTET", "2"))
+    TUNNEL_POOL_LAST_HOST_OCTET = int(os.environ.get("TUNNEL_POOL_LAST_HOST_OCTET", "254"))
 
+settings = _Settings()
 
 
 def check_mikrotik_status(host,username,password,port):
@@ -457,3 +471,393 @@ def generate_ros_script(reg_token: str, server_url: str) -> str:
 :local version [/system resource get version]
 :local data ("token=" . $regToken . "&identity=" . $identity . "&board=" . $board . "&version=" . $version)
 /tool fetch url=$serverUrl http-method=post http-data=$data output=none"""
+
+
+def get_available_user_profiles(router):
+    try:
+        connection = RouterOsApiPool(
+            host=router.ip_address,
+            username=router.user_name,
+            password=router.password,
+            plaintext_login=True,
+        )
+        connection.set_timeout(5)
+        api = connection.get_api()
+        profiles = list(api.get_resource('/ip/hotspot/user/profile').get())
+        connection.disconnect()
+        return profiles
+    except exceptions.RouterOsApiConnectionError:
+        return []
+    except Exception as e:
+        logger.warning("Could not fetch profiles from %s: %s", router.ip_address, e)
+        return []
+
+
+def get_profile_by_name(router, profile_name: str):
+    profiles = get_available_user_profiles(router)
+    for profile in profiles:
+        if profile.get('name') == profile_name:
+            return profile
+        #create a new profile with the name and return it
+        try:
+            connection = RouterOsApiPool(
+                host=router.ip_address,
+                username=router.user_name,
+                password=router.password,
+                plaintext_login=True,
+            )
+            connection.set_timeout(5)
+            api = connection.get_api()
+            api.get_resource('/ip/hotspot/user/profile').add(
+                name=profile_name,
+                rate_limit="3M/3M",
+                shared_users=1
+            )
+            connection.disconnect()
+            return {"name": profile_name, "rate_limit": "3M/3M", "shared_users": 1}
+        except exceptions.RouterOsApiConnectionError as e:
+            logger.warning("Could not create profile on %s: %s", router.ip_address, e)
+            return None
+
+    return None
+
+
+def match_product_to_profile(router, product):
+    """
+    Match a Product to its corresponding MikroTik hotspot profile by name.
+    The product's speedLimit field is used as the profile name.
+
+    Returns the matched profile dict, or None if no match found.
+    """
+    profile_name = f'profile-{product.duration}MIN'
+    return get_profile_by_name(router, profile_name)
+
+
+def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
+    """
+    Adds the peer to the live kernel interface, then persists it to
+    wg0.conf via syncconf so it survives a reboot. Requires the API
+    process to have permission to run `wg`/`wg-quick` (root, or a
+    sudo rule scoped to exactly these two commands).
+    """
+    bare_ip = tunnel_ip.split("/")[0]
+    try:
+        subprocess.run(
+            [
+                "wg", "set", settings.WG_INTERFACE,
+                "peer", public_key,
+                "allowed-ips", f"{bare_ip}/32",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+ 
+        # Persist: regenerate config from live state, then sync (no tunnel drop)
+        strip = subprocess.run(
+            ["wg-quick", "strip", settings.WG_INTERFACE],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        tmp_path = f"/tmp/{settings.WG_INTERFACE}-generated.conf"
+        with open(tmp_path, "w") as f:
+            f.write(strip.stdout)
+        subprocess.run(
+            ["wg", "syncconf", settings.WG_INTERFACE, tmp_path],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to apply WireGuard peer: {exc.stderr or exc}",
+        )
+ 
+
+
+
+def generate_password(length: int = 20) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+ 
+ROUTEROS_SCRIPT_TEMPLATE = """\
+# ============================================================
+# MikroTik Hotspot + WireGuard Setup (auto-generated)
+# Router ID: @@ROUTER_ID@@
+# Idempotent: safe to run multiple times without "already have" errors.
+# ============================================================
+#
+# BEFORE YOU RUN THIS:
+# On flash-constrained boards (e.g. smips architecture, hAP lite), the
+# "wireless" and "hotspot" packages must already be installed and match
+# your RouterOS version, or this script fails at those steps.
+ 
+:local hotspotName    "@@HOTSPOT_NAME@@"
+:local hotspotDnsName "@@HOTSPOT_DNS_NAME@@"
+:local wanInterface   "@@WAN_INTERFACE@@"
+:local wifiCountry    "@@WIFI_COUNTRY@@"
+ 
+:local apiUser        "@@API_USERNAME@@"
+:local apiPassword    "@@API_PASSWORD@@"
+ 
+:local tunnelIp       "@@TUNNEL_IP@@"
+:local hubTunnelIp    "@@HUB_TUNNEL_IP@@"
+:local hubPublicKey   "@@HUB_PUBLIC_KEY@@"
+:local hubHost        "@@HUB_HOST@@"
+:local hubPort        @@HUB_PORT@@
+:local registerUrl    "@@CALLBACK_URL@@"
+:local regToken       "@@REGISTRATION_TOKEN@@"
+ 
+# ---- 1. Scoped API user for backend automation (not 'admin') ----
+:put "Step 1: Creating scoped API user..."
+:if ([:len [/user group find name=api-only]] = 0) do={
+  /user group add name=api-only policy=api,rest-api,read,write
+}
+:if ([:len [/user find name=$apiUser]] = 0) do={
+  /user add name=$apiUser password=$apiPassword group=api-only
+} else={
+  /user set [find name=$apiUser] password=$apiPassword group=api-only
+  :put "  '$apiUser' already existed — password/group updated."
+}
+ 
+# ---- 2. Wireless ----
+:put "Step 2: Configuring wireless..."
+:put "  Releasing wlan1 from CAPsMAN control (harmless if it wasn't managed)..."
+/interface wireless cap set enabled=no
+/interface wireless set wlan1 ssid=$hotspotName mode=ap-bridge disabled=no country=$wifiCountry
+ 
+# ---- 3. Hotspot bridge (double-bridge fix: move wlan1 off the default bridge) ----
+:put "Step 3: Creating bridge-hotspot..."
+:if ([:len [/interface bridge find name=bridge-hotspot]] = 0) do={
+  /interface bridge add name=bridge-hotspot
+}
+:local correctPort [/interface bridge port find interface=wlan1 bridge=bridge-hotspot]
+:if ([:len $correctPort] > 0) do={
+  :put "  wlan1 is already on bridge-hotspot — nothing to do."
+} else={
+  :local anyPort [/interface bridge port find interface=wlan1]
+  :if ([:len $anyPort] > 0) do={
+    :put "  wlan1 is on a different bridge — removing it first..."
+    /interface bridge port remove $anyPort
+    :delay 2
+  }
+  :put "  Adding wlan1 to bridge-hotspot..."
+  /interface bridge port add bridge=bridge-hotspot interface=wlan1
+}
+ 
+# ---- 4. IP / DHCP for hotspot clients ----
+:put "Step 4: Setting up hotspot IP/DHCP..."
+:if ([:len [/ip address find address=10.10.10.1/24]] = 0) do={
+  /ip address add address=10.10.10.1/24 interface=bridge-hotspot
+}
+:if ([:len [/ip pool find name=hotspot-pool]] = 0) do={
+  /ip pool add name=hotspot-pool ranges=10.10.10.10-10.10.10.254
+}
+:if ([:len [/ip dhcp-server find name=dhcp-hotspot]] = 0) do={
+  /ip dhcp-server add name=dhcp-hotspot interface=bridge-hotspot address-pool=hotspot-pool lease-time=1h disabled=no
+}
+:if ([:len [/ip dhcp-server network find address=10.10.10.0/24]] = 0) do={
+  /ip dhcp-server network add address=10.10.10.0/24 gateway=10.10.10.1 dns-server=8.8.8.8
+}
+ 
+# ---- 5. Hotspot profile + server ----
+:put "Step 5: Creating hotspot server..."
+:if ([:len [/ip hotspot profile find name=hotspot-profile]] = 0) do={
+  /ip hotspot profile add name=hotspot-profile hotspot-address=10.10.10.1 dns-name=$hotspotDnsName
+}
+:if ([:len [/ip hotspot find name=$hotspotName]] = 0) do={
+  /ip hotspot add name=$hotspotName interface=bridge-hotspot address-pool=hotspot-pool profile=hotspot-profile disabled=no
+}
+ 
+# ---- 6. Voucher duration profiles ----
+:put "Step 6: Creating voucher profiles..."
+:if ([:len [/ip hotspot user profile find name=profile-30min]] = 0) do={
+  /ip hotspot user profile add name=profile-30min rate-limit=2M/2M
+}
+:if ([:len [/ip hotspot user profile find name=profile-1hr]] = 0) do={
+  /ip hotspot user profile add name=profile-1hr rate-limit=4M/4M
+}
+:if ([:len [/ip hotspot user profile find name=profile-3hr]] = 0) do={
+  /ip hotspot user profile add name=profile-3hr rate-limit=4M/4M
+}
+:if ([:len [/ip hotspot user profile find name=profile-24hr]] = 0) do={
+  /ip hotspot user profile add name=profile-24hr rate-limit=6M/6M
+}
+:if ([:len [/ip hotspot user profile find name=profile-7day]] = 0) do={
+  /ip hotspot user profile add name=profile-7day rate-limit=6M/6M
+}
+ 
+# ---- 7. NAT ----
+:put "Step 7: Setting up NAT..."
+:if ([:len [/ip firewall nat find chain=srcnat action=masquerade out-interface=$wanInterface]] = 0) do={
+  /ip firewall nat add chain=srcnat out-interface=$wanInterface action=masquerade
+}
+ 
+# ---- 8. WireGuard: dial OUT to the hub (works behind any NAT/CGNAT) ----
+:put "Step 8: Connecting to WireGuard hub..."
+:if ([:len [/interface wireguard find name=wg-hub]] = 0) do={
+  /interface wireguard add name=wg-hub listen-port=51820
+}
+:if ([:len [/ip address find address=($tunnelIp . "/32")]] = 0) do={
+  /ip address add address=($tunnelIp . "/32") interface=wg-hub
+}
+:if ([:len [/interface wireguard peers find interface=wg-hub]] = 0) do={
+  /interface wireguard peers add interface=wg-hub public-key=$hubPublicKey \\
+    endpoint-address=$hubHost endpoint-port=$hubPort \\
+    allowed-address=($hubTunnelIp . "/32") persistent-keepalive=25s
+}
+ 
+# ---- 9. Certificate + REST API, reachable only over the tunnel ----
+:put "Step 9: Enabling REST API..."
+:if ([:len [/certificate find name=local-ca]] = 0) do={
+  /certificate add name=local-ca common-name=local-ca days-valid=3650 key-usage=key-cert-sign,crl-sign
+  /certificate sign local-ca ca-crl-host=$tunnelIp name=local-ca
+}
+:if ([:len [/certificate find name=api-cert]] = 0) do={
+  /certificate add name=api-cert common-name=$tunnelIp days-valid=3650 key-usage=tls-server
+  /certificate sign api-cert ca=local-ca name=api-cert
+}
+/ip service set www-ssl certificate=api-cert disabled=no
+ 
+# ---- 10. Firewall: allow tunnel traffic BEFORE the default WAN drop rule ----
+:put "Step 10: Fixing firewall rule order..."
+:local dropRule [/ip firewall filter find comment="defconf: drop all not coming from LAN"]
+:if ([:len $dropRule] > 0) do={
+  :if ([:len [/ip firewall filter find comment="allow wireguard handshake"]] = 0) do={
+    /ip firewall filter add chain=input protocol=udp dst-port=51820 action=accept place-before=$dropRule comment="allow wireguard handshake"
+  }
+  :if ([:len [/ip firewall filter find comment="allow hub traffic over wireguard"]] = 0) do={
+    /ip firewall filter add chain=input in-interface=wg-hub action=accept place-before=$dropRule comment="allow hub traffic over wireguard"
+  }
+} else={
+  :put "  WARNING: default WAN drop rule not found - add these manually above it:"
+  :put "  /ip firewall filter add chain=input protocol=udp dst-port=51820 action=accept"
+  :put "  /ip firewall filter add chain=input in-interface=wg-hub action=accept"
+}
+ 
+# ---- 11. Remove the default login.html (you'll upload your own custom page) ----
+:put "Step 11: Removing default login.html..."
+:if ([:len [/file find name="hotspot/login.html"]] > 0) do={
+  /file remove "hotspot/login.html"
+  :put "  Removed default login.html."
+} else={
+  :put "  No default login.html found — nothing to remove."
+}
+ 
+# ---- 12. Register this router with the platform ----
+:put "Step 12: Registering with platform..."
+:local myPublicKey [/interface wireguard get [find name=wg-hub] public-key]
+:local payload ("{\\"token\\":\\"" . $regToken . "\\",\\"public_key\\":\\"" . $myPublicKey . "\\"}")
+:local result [/tool fetch url=$registerUrl http-method=post \\
+  http-header-field="Content-Type: application/json" \\
+  http-data=$payload output=user as-value]
+ 
+:put ""
+:put "============================================================"
+:put " SETUP COMPLETE - registration response from platform:"
+:put "============================================================"
+:put ($result->"data")
+:put ""
+:put "------------------------------------------------------------"
+:put "If the above shows an error, this router's public key is below"
+:put "(copy the line exactly, nothing else) - contact support to add"
+:put "it manually:"
+:put ""
+:put $myPublicKey
+:put ""
+:put "------------------------------------------------------------"
+"""
+ 
+ 
+def render_setup_script(
+    router_id: int,
+    req: RouterCreate,
+    tunnel_ip: str,
+    api_username: str,
+    api_password: str,
+    registration_token: str,
+    hostname: str,
+    wan_interface: str,
+) -> str:
+    replacements = {
+        "@@ROUTER_ID@@": str(router_id),
+        "@@HOTSPOT_NAME@@": req.hotspot_name,
+        "@@HOTSPOT_DNS_NAME@@": hostname,
+        "@@WAN_INTERFACE@@": wan_interface,
+        "@@WIFI_COUNTRY@@": "Kenya",
+        "@@API_USERNAME@@": api_username,
+        "@@API_PASSWORD@@": api_password,
+        "@@TUNNEL_IP@@": tunnel_ip,
+        "@@HUB_PUBLIC_KEY@@": settings.HUB_PUBLIC_KEY,
+        "@@HUB_HOST@@": settings.HUB_ENDPOINT_HOST,
+        "@@HUB_PORT@@": str(settings.HUB_ENDPOINT_PORT),
+        "@@CALLBACK_URL@@": f"{settings.CALLBACK_BASE_URL}/v1/register/callback",
+        "@@REGISTRATION_TOKEN@@": registration_token,
+    }
+    script = SETUP_SCRIPT_TEMPLATE
+    for token, value in replacements.items():
+        script = script.replace(token, value)
+    return script
+ 
+ 
+# ============================================================
+# WireGuard hub — applying the peer for real
+# ============================================================
+ 
+def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
+    bare_ip = tunnel_ip.split("/")[0]
+    try:
+        subprocess.run(
+            [
+                "wg", "set", settings.WG_INTERFACE,
+                "peer", public_key,
+                "allowed-ips", f"{bare_ip}/32",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+ 
+        strip = subprocess.run(
+            ["wg-quick", "strip", settings.WG_INTERFACE],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        tmp_path = f"/tmp/{settings.WG_INTERFACE}-generated.conf"
+        with open(tmp_path, "w") as f:
+            f.write(strip.stdout)
+        subprocess.run(
+            ["wg", "syncconf", settings.WG_INTERFACE, tmp_path],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to apply WireGuard peer: {exc.stderr or exc}",
+        )
+ 
+
+def allocate_tunnel_ip(db: Session) -> str:
+    taken = {
+        row.tunnel_ip
+        for row in db.execute(select(RouterInfo.tunnel_ip).with_for_update()).all()
+    }
+ 
+    for octet in range(
+        settings.TUNNEL_POOL_FIRST_HOST_OCTET,
+        settings.TUNNEL_POOL_LAST_HOST_OCTET + 1,
+    ):
+        candidate = f"10.200.0.{octet}"
+        if candidate not in taken:
+            return candidate
+ 
+    raise HTTPException(
+        status_code=409,
+        detail="WireGuard tunnel pool exhausted (10.200.0.0/16 is full). "
+        "Expand the pool before adding more routers.",
+    )

@@ -1,13 +1,18 @@
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from typing import List,Dict,Any,Optional
 from datetime import datetime
+
 class RouterCreate(BaseModel):
     name: str
     ip_address: str
     username: str
     password: str
     location: str
+    till_number: str
     port: int = 8728
+    hotspot_name: str = Field(..., examples=["Tano@Bora"])
+    wan_interface: str = "ether1"
+    wifi_country: str = "kenya"
 
 
 class ProductOut(BaseModel):
@@ -52,7 +57,6 @@ class RoutersListResponse(BaseModel):
     message: str
     routers: List[RouterOut]
 
-
 class RouterPingResponse(BaseModel):
     message: str
     status: str
@@ -60,16 +64,6 @@ class RouterPingResponse(BaseModel):
     memoryUsage: int
     uptime: str
     activeUsers: int
-
-
-class RouterFullCreate(BaseModel):
-    name: str
-    ipAddress: str
-    username: str
-    password: str
-    hotspotName: str
-    tillNumber: str
-
 
 class HotspotPayRequest(BaseModel):
     phone: str
@@ -124,3 +118,28 @@ class RouterRegistrationResponse(BaseModel):
 class RegistrationScriptResponse(BaseModel):
     regToken: str
     script: str
+
+
+
+class SetupScriptResponse(BaseModel):
+    router_id: int
+    tunnel_ip: str
+    registration_token: str
+    script: str
+ 
+ 
+class RegisterCallbackRequest(BaseModel):
+    token: str
+    public_key: str
+ 
+ 
+class RegisterCallbackResponse(BaseModel):
+    status: str
+    hub_public_key: str
+    hub_endpoint_host: str
+    hub_endpoint_port: int
+    assigned_tunnel_ip: str
+ 
+class WireGuardSet(BaseModel):
+    public_key:str
+    ip_address:str

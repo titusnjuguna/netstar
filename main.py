@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from typing import Union
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -55,7 +58,7 @@ app.add_middleware(
 )
 
 # Create database tables
-Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine,checkfirst=True)
 
 # Include routers
 app.include_router(payment_router)

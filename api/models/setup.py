@@ -9,6 +9,7 @@ class RouterInfo(Base):
     id = Column(Integer,primary_key=True,index=True)
     name = Column(String)
     ip_address = Column(String,unique=True,index=True)
+    tunnel_ip = Column(String,unique=True,nullable=True)
     password = Column(String)
     user_name = Column(String)
     location = Column(String)

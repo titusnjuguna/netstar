@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wifi at 10 — Get Online</title>
+<style>
+  :root{
+    --ink: #1C2620;
+    --paper: #FBF1E4;
+    --paper-edge: #EFE2CC;
+    --signal: #E0552B;
+    --money: #2E7D46;
+    --money-dark: #225f37;
+    --stone: #8B8275;
+    --stub-w: 108px;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap{
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 22px 20px;
+    max-width: 920px;
+    margin: 0 auto;
+  }
+  .wordmark{
+    font-family: "Arial Narrow", Arial, sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    font-size: 20px;
+    text-transform: uppercase;
+    color: var(--paper);
+  }
+  .wordmark span{ color: var(--signal); }
+  .demo-pill{
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: var(--paper);
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-weight: 700;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding: 28px 0 36px;
+    text-align: left;
+  }
+  .eyebrow{
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--stone);
+    margin: 0 0 14px;
+    display:flex;
+    align-items:center;
+    gap: 10px;
+  }
+  .bars{
+    display:inline-flex;
+    align-items:flex-end;
+    gap: 3px;
+    height: 14px;
+  }
+  .bars i{
+    display:block;
+    width: 4px;
+    background: var(--signal);
+    border-radius: 1px;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .bars i:nth-child(1){ height: 4px;  animation-delay: 0s; }
+  .bars i:nth-child(2){ height: 8px;  animation-delay: .15s; }
+  .bars i:nth-child(3){ height: 11px; animation-delay: .3s; }
+  .bars i:nth-child(4){ height: 14px; animation-delay: .45s; }
+  @keyframes pulse{
+    0%, 100% { opacity: .35; }
+    50% { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .bars i{ animation: none; opacity: .9; }
+  }
+
+  h1{
+    font-family: "Arial Narrow", Arial, sans-serif;
+    font-weight: 800;
+    font-size: clamp(32px, 6vw, 48px);
+    line-height: 1.05;
+    margin: 0 0 12px;
+    letter-spacing: -0.5px;
+  }
+  .hero p{
+    font-size: 16px;
+    color: #D8CFC0;
+    max-width: 480px;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* ---------- Voucher grid ---------- */
+  .grid{
+    display:grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin-top: 8px;
+  }
+  @media (min-width: 640px){
+    .grid{ grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .grid-status{
+    grid-column: 1 / -1;
+    font-size: 14px;
+    color: var(--stone);
+    padding: 24px 0;
+  }
+  .grid-status.error{ color: var(--signal); }
+
+  .ticket{
+    position: relative;
+    display:flex;
+    background: var(--paper);
+    border-radius: 14px;
+    overflow: visible;
+    box-shadow: 0 6px 0 var(--paper-edge), 0 14px 24px rgba(0,0,0,0.28);
+  }
+
+  /* notch cutouts where the perforation meets the top/bottom edge */
+  .ticket::before,
+  .ticket::after{
+    content:"";
+    position:absolute;
+    width:18px;
+    height:18px;
+    background: var(--ink);
+    border-radius: 50%;
+    right: calc(var(--stub-w) - 9px);
+  }
+  .ticket::before{ top: -9px; }
+  .ticket::after{ bottom: -9px; }
+
+  .ticket__main{
+    flex: 1;
+    padding: 18px 16px;
+    color: var(--ink);
+    min-width: 0;
+  }
+  .ticket__eyebrow{
+    margin: 0 0 6px;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--stone);
+    font-weight: 700;
+  }
+  .ticket__duration{
+    margin: 0 0 8px;
+    font-family: "Arial Narrow", Arial, sans-serif;
+    font-weight: 800;
+    font-size: 26px;
+    line-height: 1;
+  }
+  .ticket__duration span{
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--stone);
+    margin-left: 4px;
+  }
+  .ticket__desc{
+    margin:0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #4B453C;
+  }
+
+  .ticket__stub{
+    width: var(--stub-w);
+    flex-shrink:0;
+    border-left: 2px dashed var(--paper-edge);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap: 10px;
+    padding: 14px 8px;
+    text-align:center;
+  }
+  .ticket__price{
+    margin:0;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .ticket__price span{
+    display:block;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--stone);
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  .buy-btn{
+    border: none;
+    background: var(--money);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .buy-btn:hover{ background: var(--money-dark); }
+  .buy-btn:focus-visible{
+    outline: 3px solid var(--signal);
+    outline-offset: 2px;
+  }
+
+  /* ---------- Footer ---------- */
+  footer{
+    margin-top: 44px;
+    padding-top: 18px;
+    border-top: 1px solid #33403A;
+    font-size: 12px;
+    color: var(--stone);
+    line-height: 1.6;
+  }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(10,15,12,0.6);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .modal-overlay.open{ display:flex; }
+  .modal{
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 16px;
+    max-width: 360px;
+    width: 100%;
+    padding: 24px;
+    position: relative;
+  }
+  .modal h2{
+    font-family: "Arial Narrow", Arial, sans-serif;
+    font-size: 22px;
+    margin: 0 0 4px;
+  }
+  .modal .summary{
+    font-size: 13px;
+    color: var(--stone);
+    margin: 0 0 18px;
+  }
+  .modal label{
+    display:block;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--stone);
+  }
+  .modal input{
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--paper-edge);
+    background: #fff;
+    font-size: 15px;
+    margin-bottom: 16px;
+  }
+  .modal input:focus-visible{
+    outline: 3px solid var(--signal);
+    outline-offset: 1px;
+  }
+  .modal .request-btn{
+    width:100%;
+    border:none;
+    background: var(--money);
+    color:#fff;
+    font-weight:700;
+    font-size: 14px;
+    padding: 12px;
+    border-radius: 8px;
+    cursor:pointer;
+  }
+  .modal .request-btn:disabled{ opacity: .6; cursor: default; }
+  .modal .status{
+    margin-top: 14px;
+    font-size: 13px;
+    min-height: 18px;
+    color: var(--money-dark);
+    font-weight: 600;
+  }
+  .modal .close-btn{
+    position:absolute;
+    top: 14px;
+    right: 14px;
+    background:none;
+    border:none;
+    font-size: 18px;
+    color: var(--stone);
+    cursor:pointer;
+    line-height:1;
+    padding: 4px;
+  }
+  .modal .close-btn:focus-visible{
+    outline: 2px solid var(--signal);
+    border-radius: 4px;
+  }
+
+  /* ---------- Reconnect strip ---------- */
+  .reconnect{
+    margin-bottom: 28px;
+    background: #22302A;
+    border-radius: 14px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    border: 1px solid #2E3E36;
+  }
+  .reconnect__label{
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--stone);
+    flex: 1 1 100%;
+    margin: 0 0 4px;
+  }
+  .reconnect__btns{
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .reconnect-btn{
+    flex: 1;
+    background: #2E3E36;
+    border: 1.5px solid #3E5248;
+    color: var(--paper);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    padding: 11px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background .15s, border-color .15s;
+  }
+  .reconnect-btn:hover{ background: #3a4e44; border-color: var(--paper); }
+  .reconnect-btn:focus-visible{ outline: 2px solid var(--signal); outline-offset: 2px; }
+  .reconnect-btn svg{ flex-shrink: 0; }
+
+  /* ---------- Hidden admin panel ---------- */
+  .admin-panel{
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height .35s cubic-bezier(.4,0,.2,1);
+    background: #111a16;
+    border-bottom: 1px solid #2A3832;
+  }
+  .admin-panel.open{ max-height: 180px; }
+  .admin-inner{
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 14px 20px;
+  }
+  .admin-inner form{
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .admin-inner input{
+    flex: 1;
+    min-width: 110px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid #2A3832;
+    background: #1C2620;
+    color: var(--paper);
+    font-size: 13px;
+  }
+  .admin-inner input::placeholder{ color: #4a5e56; }
+  .admin-inner input:focus{ outline: 2px solid var(--signal); outline-offset: 1px; }
+  .admin-connect-btn{
+    background: var(--money);
+    color: #fff;
+    border: none;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 9px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .admin-connect-btn:disabled{ opacity: .6; cursor: default; }
+  .admin-status{
+    margin-top: 8px;
+    font-size: 12px;
+    min-height: 16px;
+    color: var(--stone);
+  }
+</style>
+</head>
+<body>
+
+<!-- Hidden admin login — revealed by 5 rapid taps on the wordmark -->
+<div class="admin-panel" id="adminPanel" aria-hidden="true">
+  <div class="admin-inner">
+    <form id="adminForm">
+      <input type="text"     id="adminUser" placeholder="Username" autocomplete="username"         required>
+      <input type="password" id="adminPass" placeholder="Password" autocomplete="current-password" required>
+      <button type="submit" class="admin-connect-btn" id="adminBtn">Connect</button>
+    </form>
+    <p class="admin-status" id="adminStatus" aria-live="polite"></p>
+  </div>
+</div>
+
+<header>
+  <div class="wordmark" id="wordmark" style="cursor:default;user-select:none;">—</div>
+  <div class="demo-pill">Hotspot</div>
+</header>
+
+<div class="wrap">
+
+  <section class="hero">
+    <p class="eyebrow">
+      <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span id="heroLocation"></span>
+    </p>
+    <h1 id="heroTitle">Buy your way online.</h1>
+    <p id="heroDesc">Pick a voucher below, pay by phone, and you're connected in under a minute.</p>
+  </section>
+
+  <!-- Reconnect strip -->
+  <div class="reconnect">
+    <p class="reconnect__label">Already paid? Reconnect instantly</p>
+    <div class="reconnect__btns">
+      <button class="reconnect-btn" id="voucherBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Use Voucher Code
+      </button>
+      <button class="reconnect-btn" id="mpesaBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor"/></svg>
+        Use M-Pesa Reference
+      </button>
+    </div>
+  </div>
+
+  <section class="grid" id="grid">
+    <p class="grid-status" id="gridStatus">Loading packages…</p>
+  </section>
+
+  <footer>
+    After payment is confirmed you will be connected automatically.<br>
+    Ensure your phone number is correct before requesting payment.
+  </footer>
+
+</div>
+
+<!-- ---------- Voucher reconnect modal ---------- -->
+<div class="modal-overlay" id="voucherOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="voucherTitle">
+    <button class="close-btn" data-close="voucherOverlay" aria-label="Close">✕</button>
+    <h2 id="voucherTitle">Use a voucher</h2>
+    <p class="summary">Enter your voucher code to get connected.</p>
+    <form id="voucherForm">
+      <label for="voucherCode">Voucher code</label>
+      <input type="text" id="voucherCode" placeholder="e.g. WIFI-XXXX-XXXX" autocomplete="off" required>
+      <button type="submit" class="request-btn" id="voucherSubmitBtn">Connect</button>
+      <p class="status" id="voucherStatus" aria-live="polite"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ---------- M-Pesa reference reconnect modal ---------- -->
+<div class="modal-overlay" id="mpesaOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mpesaTitle">
+    <button class="close-btn" data-close="mpesaOverlay" aria-label="Close">✕</button>
+    <h2 id="mpesaTitle">M-Pesa reference</h2>
+    <p class="summary">Enter your M-Pesa confirmation code to reconnect.</p>
+    <form id="mpesaRefForm">
+      <label for="mpesaRef">M-Pesa reference</label>
+      <input type="text" id="mpesaRef" placeholder="e.g. QGJ4xxxxxxx" autocomplete="off" required>
+      <button type="submit" class="request-btn" id="mpesaSubmitBtn">Connect</button>
+      <p class="status" id="mpesaStatus" aria-live="polite"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ---------- Payment modal ---------- -->
+<div class="modal-overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="close-btn" id="closeBtn" aria-label="Close">✕</button>
+    <h2 id="modalTitle">Pay for your voucher</h2>
+    <p class="summary" id="modalSummary"></p>
+    <form id="payForm">
+      <label for="phone">Phone number</label>
+      <input type="tel" id="phone" placeholder="07XX XXX XXX" required>
+      <button type="submit" class="request-btn" id="requestBtn">Request payment</button>
+      <p class="status" id="status" aria-live="polite"></p>
+    </form>
+  </div>
+</div>
+
+<script>
+  const BASE_URL  = 'https://api.net.babybull.cc';
+  const HOST      = location.hostname;
+  const API_URL   = BASE_URL + '/api/v1/get/products?host=' + HOST;
+  let ROUTER_ID = '';
+
+  const grid = document.getElementById('grid');
+  const gridStatus = document.getElementById('gridStatus');
+  const overlay = document.getElementById('overlay');
+  const modalSummary = document.getElementById('modalSummary');
+  const payForm = document.getElementById('payForm');
+  const requestBtn = document.getElementById('requestBtn');
+  const statusEl = document.getElementById('status');
+  const phoneInput = document.getElementById('phone');
+  const closeBtn = document.getElementById('closeBtn');
+
+  let activePackage = null;
+
+  function buildTicket(product) {
+    const name     = product.name        ?? product.title  ?? 'Package';
+    const desc     = product.description ?? product.desc   ?? '';
+    const price    = product.price       ?? product.amount ?? product.cost ?? '—';
+    const currency = product.currency    ?? 'KES';
+    const id       = product.id          ?? product.product_id ?? name;
+    const duration = product.duration    ?? product.validity   ?? product.time ?? '';
+
+    const article = document.createElement('article');
+    article.className = 'ticket';
+    article.innerHTML = `
+      <div class="ticket__main">
+        <p class="ticket__eyebrow">${escHtml(name)}</p>
+        <p class="ticket__duration">${escHtml(String(duration))}<span>hours</span></p>
+        <p class="ticket__desc">${escHtml(desc)}</p>
+      </div>
+      <div class="ticket__stub">
+        <p class="ticket__price"><span>${escHtml(currency)}</span>${escHtml(String(price))}</p>
+        <button
+          class="buy-btn"
+          data-name="${escAttr(name)}"
+          data-duration="${escAttr(String(duration) + ' hours')}"
+          data-price="${escAttr(String(price))}"
+          data-currency="${escAttr(currency)}"
+          data-id="${escAttr(String(id))}"
+        >Buy voucher</button>
+      </div>`;
+    return article;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function escAttr(s) {
+    return s.replace(/"/g,'&quot;');
+  }
+
+  function applyMeta(data) {
+    const name     = data.name     ?? data.hotspot_name ?? data.router_name ?? data.ssid ?? '';
+    const location = data.location ?? data.address      ?? data.place       ?? data.city ?? '';
+
+
+    if (name)     document.getElementById('wordmark').textContent     = name;
+    if (location) document.getElementById('heroLocation').textContent = location;
+    document.title = name || document.title;
+  }
+
+  async function loadProducts() {
+    try {
+      const res = await fetch(API_URL);
+      if (!res.ok) throw new Error('Server returned ' + res.status);
+      const data = await res.json();
+
+      const products = Array.isArray(data)
+        ? data
+        : (data.data ?? data.products ?? data.items ?? []);
+
+      if (!Array.isArray(data)) applyMeta(data);
+
+      if (products.length) ROUTER_ID = String(products[0].routerId ?? ROUTER_ID);
+
+      if (!products.length) {
+        gridStatus.textContent = 'No packages available right now.';
+        return;
+      }
+
+      gridStatus.remove();
+      products.forEach(p => grid.appendChild(buildTicket(p)));
+    } catch (err) {
+      gridStatus.textContent = 'Could not load packages. Please refresh to try again.';
+      gridStatus.classList.add('error');
+      console.error('Products fetch failed:', err);
+    }
+  }
+
+  // Event delegation — handles dynamically rendered buy buttons
+  grid.addEventListener('click', (e) => {
+    const btn = e.target.closest('.buy-btn');
+    if (!btn) return;
+    activePackage = {
+      name:     btn.dataset.name,
+      duration: btn.dataset.duration,
+      price:    btn.dataset.price,
+      currency: btn.dataset.currency,
+      id:       btn.dataset.id,
+    };
+    modalSummary.textContent =
+      activePackage.name + ' · ' + activePackage.duration + ' · ' + activePackage.currency + ' ' + activePackage.price;
+    statusEl.textContent = '';
+    phoneInput.value = '';
+    requestBtn.disabled = false;
+    requestBtn.textContent = 'Request payment';
+    overlay.classList.add('open');
+    phoneInput.focus();
+  });
+
+  function closeModal() {
+    overlay.classList.remove('open');
+  }
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+
+  function toE164(raw) {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('254')) return digits;
+    if (digits.startsWith('0'))   return '254' + digits.slice(1);
+    if (digits.startsWith('7') || digits.startsWith('1')) return '254' + digits;
+    return digits;
+  }
+
+  const params        = new URLSearchParams(location.search);
+  const DST           = params.get('dst') || '/';
+  const LINK_LOGIN    = params.get('link-login-only') || params.get('link-login') || '/login';
+
+  function mikrotikLogin(username, password) {
+    const url = new URL(LINK_LOGIN, location.origin);
+    url.searchParams.set('username', username);
+    url.searchParams.set('password', password);
+    url.searchParams.set('dst', DST);
+    location.href = url.toString();
+  }
+
+  function pollStatus(reference) {
+    const INTERVAL  = 4000;
+    const MAX_TRIES = 20; // ~80 seconds total
+    let tries = 0;
+
+    const timer = setInterval(async () => {
+      tries++;
+      try {
+        const res  = await fetch(BASE_URL + '/api/hotspot/pay/status/' + reference);
+        const data = await res.json().catch(() => ({}));
+        const status = (data.status ?? '').toLowerCase();
+
+        if (status === 'success' || status === 'completed' || status === 'paid') {
+          clearInterval(timer);
+          statusEl.style.color = 'var(--money)';
+          statusEl.textContent = 'Payment confirmed! Connecting you…';
+          const username = data.username ?? data.user ?? data.login ?? '';
+          const password = data.password ?? data.pass ?? data.secret ?? '';
+          setTimeout(() => mikrotikLogin(username, password), 1500);
+          return;
+        }
+
+        if (status === 'failed' || status === 'cancelled' || status === 'error') {
+          clearInterval(timer);
+          statusEl.style.color = 'var(--signal)';
+          statusEl.textContent = data.message ?? 'Payment failed. Please try again.';
+          requestBtn.disabled = false;
+          requestBtn.textContent = 'Request payment';
+          return;
+        }
+      } catch { /* keep polling on network blip */ }
+
+      if (tries >= MAX_TRIES) {
+        clearInterval(timer);
+        statusEl.style.color = 'var(--signal)';
+        statusEl.textContent = 'Payment confirmation timed out. Contact support if charged.';
+        requestBtn.disabled = false;
+        requestBtn.textContent = 'Request payment';
+      }
+    }, INTERVAL);
+  }
+
+  payForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    requestBtn.disabled = true;
+    requestBtn.textContent = 'Sending request…';
+    statusEl.style.color = '';
+    statusEl.textContent = 'Sending payment request to ' + phoneInput.value + '…';
+
+    const phone = toE164(phoneInput.value);
+
+    try {
+      const res  = await fetch(BASE_URL + '/api/hotspot/pay/' + ROUTER_ID, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, productId: String(activePackage.id) }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        const reference = data.reference ?? data.CheckoutRequestID ?? data.checkoutRequestId ?? data.id;
+        statusEl.textContent = data.message ?? 'Check your phone and enter your M-Pesa PIN…';
+        requestBtn.textContent = 'Waiting for payment…';
+        if (reference) {
+          pollStatus(reference);
+        }
+      } else {
+        statusEl.style.color = 'var(--signal)';
+        statusEl.textContent = data.message ?? data.error ?? 'Payment request failed. Please try again.';
+        requestBtn.disabled = false;
+        requestBtn.textContent = 'Request payment';
+      }
+    } catch {
+      statusEl.style.color = 'var(--signal)';
+      statusEl.textContent = 'Network error. Check your connection and try again.';
+      requestBtn.disabled = false;
+      requestBtn.textContent = 'Request payment';
+    }
+  });
+
+  // ---------- Generic modal helpers ----------
+  function openOverlay(id)  { document.getElementById(id).classList.add('open'); }
+  function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => closeOverlay(btn.dataset.close));
+  });
+  ['voucherOverlay', 'mpesaOverlay'].forEach(id => {
+    document.getElementById(id).addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeOverlay(id);
+    });
+  });
+
+  function setModalState(submitBtn, statusEl, msg, isError, loading) {
+    submitBtn.disabled = loading || false;
+    submitBtn.textContent = loading ? 'Connecting…' : 'Connect';
+    statusEl.style.color = isError ? 'var(--signal)' : '';
+    statusEl.textContent = msg;
+  }
+
+  // ---------- Voucher reconnect ----------
+  document.getElementById('voucherBtn').addEventListener('click', () => {
+    document.getElementById('voucherCode').value = '';
+    document.getElementById('voucherStatus').textContent = '';
+    document.getElementById('voucherSubmitBtn').disabled = false;
+    document.getElementById('voucherSubmitBtn').textContent = 'Connect';
+    openOverlay('voucherOverlay');
+    document.getElementById('voucherCode').focus();
+  });
+
+  document.getElementById('voucherForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn    = document.getElementById('voucherSubmitBtn');
+    const status = document.getElementById('voucherStatus');
+    const voucher = document.getElementById('voucherCode').value.trim();
+    setModalState(btn, status, 'Checking voucher…', false, true);
+    try {
+      const res  = await fetch(BASE_URL + '/api/hotspot/connect/voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voucher, routerId: ROUTER_ID }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setModalState(btn, status, data.message ?? 'Connected! Redirecting…', false, false);
+        status.style.color = 'var(--money)';
+        setTimeout(() => mikrotikLogin(data.username ?? voucher, data.password ?? voucher), 1200);
+      } else {
+        setModalState(btn, status, data.message ?? 'Invalid voucher. Try again.', true, false);
+      }
+    } catch {
+      setModalState(btn, status, 'Network error. Try again.', true, false);
+    }
+  });
+
+  // ---------- M-Pesa reference reconnect ----------
+  document.getElementById('mpesaBtn').addEventListener('click', () => {
+    document.getElementById('mpesaRef').value = '';
+    document.getElementById('mpesaStatus').textContent = '';
+    document.getElementById('mpesaSubmitBtn').disabled = false;
+    document.getElementById('mpesaSubmitBtn').textContent = 'Connect';
+    openOverlay('mpesaOverlay');
+    document.getElementById('mpesaRef').focus();
+  });
+
+  document.getElementById('mpesaRefForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn       = document.getElementById('mpesaSubmitBtn');
+    const status    = document.getElementById('mpesaStatus');
+    const reference = document.getElementById('mpesaRef').value.trim();
+    setModalState(btn, status, 'Verifying reference…', false, true);
+    try {
+      const res  = await fetch(BASE_URL + '/api/hotspot/connect/mpesa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference, routerId: ROUTER_ID }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setModalState(btn, status, data.message ?? 'Verified! Connecting…', false, false);
+        status.style.color = 'var(--money)';
+        setTimeout(() => mikrotikLogin(data.username ?? '', data.password ?? ''), 1200);
+      } else {
+        setModalState(btn, status, data.message ?? 'Reference not found. Try again.', true, false);
+      }
+    } catch {
+      setModalState(btn, status, 'Network error. Try again.', true, false);
+    }
+  });
+
+  // ---------- Hidden admin login (5 rapid taps on wordmark) ----------
+  (function() {
+    const wordmark   = document.getElementById('wordmark');
+    const adminPanel = document.getElementById('adminPanel');
+    let taps = 0, timer;
+    wordmark.addEventListener('click', () => {
+      taps++;
+      clearTimeout(timer);
+      timer = setTimeout(() => { taps = 0; }, 2000);
+      if (taps >= 5) {
+        taps = 0;
+        const open = adminPanel.classList.toggle('open');
+        adminPanel.setAttribute('aria-hidden', String(!open));
+        if (open) document.getElementById('adminUser').focus();
+      }
+    });
+  })();
+
+  document.getElementById('adminForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn      = document.getElementById('adminBtn');
+    const statusEl = document.getElementById('adminStatus');
+    const username = document.getElementById('adminUser').value.trim();
+    const password = document.getElementById('adminPass').value;
+    btn.disabled = true;
+    btn.textContent = 'Connecting…';
+    statusEl.style.color = '';
+    statusEl.textContent = '';
+    try {
+      mikrotikLogin(username, password);
+    } catch {
+      statusEl.style.color = 'var(--signal)';
+      statusEl.textContent = 'Login failed.';
+      btn.disabled = false;
+      btn.textContent = 'Connect';
+    }
+  });
+
+  loadProducts();
+</script>
+
+</body>
+</html>
