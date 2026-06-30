@@ -796,7 +796,7 @@ def render_setup_script(
         "@@CALLBACK_URL@@": f"{settings.CALLBACK_BASE_URL}/v1/register/callback",
         "@@REGISTRATION_TOKEN@@": registration_token,
     }
-    script = SETUP_SCRIPT_TEMPLATE
+    script = ROUTEROS_SCRIPT_TEMPLATE
     for token, value in replacements.items():
         script = script.replace(token, value)
     return script
