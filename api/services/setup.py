@@ -38,6 +38,7 @@ _template_env = Environment(
 class _Settings:
     WG_INTERFACE = os.environ.get("WG_INTERFACE", "wg0")
     HUB_PUBLIC_KEY = os.environ.get("HUB_PUBLIC_KEY", "")
+    HUB_TUNNEL_IP = os.getenv("HUB_TUNNEL_IP","")
     HUB_ENDPOINT_HOST = os.environ.get("HUB_ENDPOINT_HOST", "")
     HUB_ENDPOINT_PORT = int(os.environ.get("HUB_ENDPOINT_PORT", "51820"))
     CALLBACK_BASE_URL = os.environ.get("CALLBACK_BASE_URL", API_BASE_URL)
@@ -795,16 +796,12 @@ def render_setup_script(
         "@@HUB_PORT@@": str(settings.HUB_ENDPOINT_PORT),
         "@@CALLBACK_URL@@": f"{settings.CALLBACK_BASE_URL}/v1/register/callback",
         "@@REGISTRATION_TOKEN@@": registration_token,
+        "@@HUB_TUNNEL_IP@@": settings.HUB_TUNNEL_IP,
     }
     script = ROUTEROS_SCRIPT_TEMPLATE
     for token, value in replacements.items():
         script = script.replace(token, value)
     return script
- 
- 
-# ============================================================
-# WireGuard hub — applying the peer for real
-# ============================================================
  
 def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
     bare_ip = tunnel_ip.split("/")[0]
