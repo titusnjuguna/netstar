@@ -139,7 +139,8 @@ def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_toke
             tillNumber=r.till_number or "",
             createdAt=r.last_seen,
             routerUUID=r.reg_token or "",
-            activeUsers=stats["activeUsers"]
+            activeUsers=stats["activeUsers"],
+            hostname=r.hostname or ""
         ))
     return RoutersListResponse(message="Routers fetched successfully", routers=router_responses)
 
@@ -192,19 +193,20 @@ def create_products(product: ProductCreate, db: Session = Depends(get_db), _: di
     #check duration is greater than 1 if less convert to minutes and store in db
     if product.duration >= 1:
         new_duration = float(product.duration) * 60
+  
+    router = db.query(RouterInfo).filter(RouterInfo.id == product.routerId).first()
+    if not router:
+        raise HTTPException(status_code=404,detail="Router not found")
+    background_tasks = BackgroundTasks()
+    background_tasks.add_task(match_product_to_profile,router,new_duration)
     new_product = Products(
         name=product.name,
         price=product.price,
         duration = new_duration,
         speed_limit=product.speedLimit,
         data_limit=product.dataLimit,
-        router_id=product.routerId
+        router_id=int(product.routerId)
     )
-    router = db.query(RouterInfo).filter(RouterInfo.id == product.routerId).first()
-    if not router:
-        raise HTTPException(status_code=404,detail="Router not found")
-    background_tasks = BackgroundTasks()
-    background_tasks.add_task(match_product_to_profile,router,new_duration)
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
@@ -283,6 +285,7 @@ def get_all_products(
             dataLimit=p.data_limit or "Unlimited",
             createdAt=p.created_at,
             routerId=str(p.router_id) if p.router_id else 1,
+            hostname=p.router.hostname if p.router else None
         )
         for p in products
     ]

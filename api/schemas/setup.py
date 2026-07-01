@@ -24,6 +24,7 @@ class ProductOut(BaseModel):
     dataLimit: str
     createdAt: datetime
     routerId: int
+    hostname: Optional[str] = None
 
 
 class RouterResponse(BaseModel):
@@ -50,7 +51,8 @@ class RouterOut(BaseModel):
     hotspotName: str
     tillNumber: str
     createdAt: Optional[datetime] = None
-    routerUUID: str
+    routerUUID: str,
+    hostname: Optional[str] = None
 
 
 class RoutersListResponse(BaseModel):
