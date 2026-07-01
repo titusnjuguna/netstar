@@ -374,8 +374,6 @@ def generate_mikrotik_setup_script(
         hostname = hostname
     )
   
- 
- 
     script = render_setup_script(
         router_id=new_router.id,
         req=req,
@@ -496,3 +494,26 @@ def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depe
         raise HTTPException(status_code=504, detail="Timed out connecting to router via scp")
 
     return {"message": f"login.html deployed to {host}:hotspot/login.html"}
+
+
+@router.get("/v1/get/products", response_model=ProductsListResponse)
+def get_products_by_router(host: str = Query(..., description="Router hostname to filter products"), db: Session = Depends(get_db)):
+    router = db.query(RouterInfo).filter(RouterInfo.hostname == host).first()
+    if not router:
+        raise HTTPException(status_code=404, detail=f"No router found with hostname {host}")
+
+    products = db.query(Products).filter(Products.router_id == router.id).order_by(desc(Products.id)).all()
+    product_responses = [
+        ProductOut(
+            id=str(p.id),
+            name=p.name,
+            price=p.price,
+            duration=p.duration or 0,
+            speedLimit=p.speed_limit,
+            dataLimit=p.data_limit or "Unlimited",
+            createdAt=p.created_at,
+            routerId=str(p.router_id) if p.router_id else 1,
+        )
+        for p in products
+    ]
+    return ProductsListResponse(message="Products fetched successfully", products=product_responses)

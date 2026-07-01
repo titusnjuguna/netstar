@@ -608,6 +608,7 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :local hubPort        @@HUB_PORT@@
 :local registerUrl    "@@CALLBACK_URL@@"
 :local regToken       "@@REGISTRATION_TOKEN@@"
+:local apiHost        "167.86.76.158"
  
 # ---- 1. Scoped API user for backend automation (not 'admin') ----
 :put "Step 1: Creating scoped API user..."
@@ -669,6 +670,11 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :if ([:len [/ip hotspot find name=$hotspotName]] = 0) do={
   /ip hotspot add name=$hotspotName interface=bridge-hotspot address-pool=hotspot-pool profile=hotspot-profile disabled=no
 }
+# ---- 5b. Walled garden — allow API access before authentication ----
+:put "Step 5b: Setting up walled garden..."
+:if ([:len [/ip hotspot walled-garden ip find dst-address=$apiHost]] = 0) do={
+  /ip hotspot walled-garden ip add dst-address=$apiHost action=accept comment="platform API"
+}
  
 # ---- 6. Voucher duration profiles ----
 :put "Step 6: Creating voucher profiles..."
@@ -702,11 +708,13 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :if ([:len [/ip address find address=($tunnelIp . "/32")]] = 0) do={
   /ip address add address=($tunnelIp . "/32") interface=wg-hub
 }
+
 :if ([:len [/interface wireguard peers find interface=wg-hub]] = 0) do={
   /interface wireguard peers add interface=wg-hub public-key=$hubPublicKey \\
     endpoint-address=$hubHost endpoint-port=$hubPort \\
     allowed-address=($hubTunnelIp . "/32") persistent-keepalive=25s
 }
+
  
 # ---- 9. Certificate + REST API, reachable only over the tunnel ----
 :put "Step 9: Enabling REST API..."
