@@ -374,7 +374,7 @@ def generate_mikrotik_setup_script(
         password=api_password,
         reg_token=registration_token,
         till_number = req.till_number,
-        hostname = hostname
+        hostname = hostname.lower()
     )
   
     script = render_setup_script(
@@ -501,7 +501,7 @@ def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depe
 
 @router.get("/v1/get/products", response_model=ProductsListResponse)
 def get_products_by_router(host: str = Query(..., description="Router hostname to filter products"), db: Session = Depends(get_db)):
-    router = db.query(RouterInfo).filter(RouterInfo.hostname == host).first()
+    router = db.query(RouterInfo).filter(RouterInfo.hostname.lower() == host.lower()).first()
     if not router:
         raise HTTPException(status_code=404, detail=f"No router found with hostname {host}")
 
