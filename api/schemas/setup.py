@@ -51,7 +51,7 @@ class RouterOut(BaseModel):
     hotspotName: str
     tillNumber: str
     createdAt: Optional[datetime] = None
-    routerUUID: str,
+    routerUUID: str
     hostname: Optional[str] = None
 
 
