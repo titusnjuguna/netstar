@@ -142,6 +142,10 @@ def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_toke
             activeUsers=stats["activeUsers"],
             hostname=r.hostname or ""
         ))
+        if r.hostname and r.hostname != r.hostname.lower():
+            r.hostname = r.hostname.lower()
+            db.commit()
+            db.refresh(r)
     return RoutersListResponse(message="Routers fetched successfully", routers=router_responses)
 
 
@@ -501,7 +505,7 @@ def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depe
 
 @router.get("/v1/get/products", response_model=ProductsListResponse)
 def get_products_by_router(host: str = Query(..., description="Router hostname to filter products"), db: Session = Depends(get_db)):
-    router = db.query(RouterInfo).filter(RouterInfo.hostname.lower() == host.lower()).first()
+    router = db.query(RouterInfo).filter(RouterInfo.hostname == host.lower()).first()
     if not router:
         raise HTTPException(status_code=404, detail=f"No router found with hostname {host}")
 
