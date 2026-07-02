@@ -370,6 +370,7 @@ def generate_mikrotik_setup_script(
     api_password = req.password
     registration_token = generate_reg_token()
     hostname = f'{req.hotspot_name}.wifi.babybull.cc'
+    hostname = hostname.lower().replace(" ", "")
     new_router = RouterInfo(
         hotspot_name=req.hotspot_name,
         ip_address = req.ip_address,
@@ -378,7 +379,7 @@ def generate_mikrotik_setup_script(
         password=api_password,
         reg_token=registration_token,
         till_number = req.till_number,
-        hostname = hostname.lower()
+        hostname = hostname
     )
   
     script = render_setup_script(
@@ -524,3 +525,12 @@ def get_products_by_router(host: str = Query(..., description="Router hostname t
         for p in products
     ]
     return ProductsListResponse(message="Products fetched successfully", products=product_responses)
+
+@router.delete("/v1/delete/router/{id}", response_model=MessageResponse)
+def delete_router(id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    db_router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
+    if not db_router:
+        raise HTTPException(status_code=404, detail="Router not found")
+    db.delete(db_router)
+    db.commit()
+    return MessageResponse(message="Router deleted successfully")
