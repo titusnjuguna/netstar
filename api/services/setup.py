@@ -42,6 +42,7 @@ class _Settings:
     CALLBACK_BASE_URL = os.environ.get("CALLBACK_BASE_URL", API_BASE_URL)
     TUNNEL_POOL_FIRST_HOST_OCTET = int(os.environ.get("TUNNEL_POOL_FIRST_HOST_OCTET", "2"))
     TUNNEL_POOL_LAST_HOST_OCTET = int(os.environ.get("TUNNEL_POOL_LAST_HOST_OCTET", "254"))
+    Backend_BASE_URL = os.environ.get("BACKEND_BASE_URL","https://api.net.babybull.cc/api/v1/")
 
 settings = _Settings()
 
@@ -608,6 +609,7 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :local hubPort        @@HUB_PORT@@
 :local registerUrl    "@@CALLBACK_URL@@"
 :local regToken       "@@REGISTRATION_TOKEN@@"
+:local backendUrl     "@@BACKEND_URL@@"
  
 # ---- 1. Scoped API user for backend automation (not 'admin') ----
 :put "Step 1: Creating scoped API user..."
@@ -678,11 +680,11 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
  
 # ---- 5c. Cache product list from platform (host passed as query param) ----
 :put "Step 5c: Caching product list..."
-/tool fetch url=("http://" . $hubHost . ":8070/v1/products?host=" . $hotspotName) \\
+/tool fetch url=($backendUrl . "get/products?host=" . $hotspotDnsName) \\
   output=file dst-path="hotspot/products.json"
 :if ([:len [/system scheduler find name=refresh-products]] = 0) do={
   /system scheduler add name=refresh-products interval=1h \\
-    on-event=(":local h \\"" . $hubHost . "\\"\\r\\n:local n \\"" . $hotspotName . "\\"\\r\\n/tool fetch url=(\\"http://\\" . \\$h . \\":8070/v1/products?host=\\" . \\$n) output=file dst-path=\\"hotspot/products.json\\"")
+    on-event="/tool fetch url=\\"@@BACKEND_URL@@get/products?host=@@HOTSPOT_DNS_NAME@@\\" output=file dst-path=\\"hotspot/products.json\\""
 }
  
 # ---- 6. Voucher duration profiles ----
@@ -811,6 +813,7 @@ def render_setup_script(
         "@@CALLBACK_URL@@": f"{settings.CALLBACK_BASE_URL}/v1/register/callback",
         "@@REGISTRATION_TOKEN@@": registration_token,
         "@@HUB_TUNNEL_IP@@": settings.HUB_TUNNEL_IP,
+        "@@BACKEND_URL@@": settings.Backend_BASE_URL,
     }
     script = ROUTEROS_SCRIPT_TEMPLATE
     for token, value in replacements.items():
