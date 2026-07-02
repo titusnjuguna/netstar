@@ -42,7 +42,7 @@ def stk_push_request(amount,phone,till_number,product_id,db):
     password = f"{till_number}{passkey}{timestamp}"
     encoded_credentials = base64.b64encode(password.encode('utf-8')).decode('utf-8')
     headers = {'Content-Type': 'application/json','Authorization': f"'Bearer {token}'"}
-
+    till_number = 174379
     payload = {    
         "BusinessShortCode": till_number,    
         "Password": encoded_credentials,    
