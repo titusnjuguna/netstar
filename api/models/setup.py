@@ -16,6 +16,7 @@ class RouterInfo(Base):
     port = Column(Integer, default=8728)
     hotspot_name = Column(String)
     till_number = Column(String)
+    phone_number = Column(String, nullable=True,default='254708520548')
     hostname = Column(String)
     reg_token = Column(String, unique=True, nullable=True)
     public_ip = Column(String, nullable=True)   # IP the VPS sees the router coming from

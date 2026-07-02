@@ -218,8 +218,8 @@ def create_products(product: ProductCreate, db: Session = Depends(get_db), _: di
     db.refresh(new_product)
     return ProductDetailResponse(
         message="Product created successfully",
-        name = new_product.router.name if new_product.router else "Unknown",
-        location = (new_product.router.location or "") if new_product.router else "",
+        name = new_product.router.hotspot_name if new_product.router else "Unknown",
+        location = (new_product.router.location or "") if new_product.router else "HotSpot",
         product=ProductOut(
             id=str(new_product.id),
             name=new_product.name,
@@ -518,6 +518,18 @@ def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depe
 
     return {"message": f"login.html deployed to {host}:hotspot/login.html"}
 
+@router.get("/v1/get/hotspot-details")
+def get_hotspot_details(host: str = Query(..., description="Router hostname to fetch details"), db: Session = Depends(get_db)):
+    router = db.query(RouterInfo).filter(RouterInfo.hostname == host.lower()).first()
+    if not router:
+        raise HTTPException(status_code=404, detail=f"No router found with hostname {host}")
+    return {
+        "hotspotName": router.hotspot_name,
+        "location": router.location,
+        "contact": router.phone_number,
+        "advert": "For more info, visit our website at https://wifi.hotspot.babybull.cc",
+        "Signature": "Powered by BabyBull Networks a Division Zenlow Ltd"
+    }
 
 @router.get("/v1/get/products", response_model=ProductsListResponse)
 def get_products_by_router(host: str = Query(..., description="Router hostname to filter products"), db: Session = Depends(get_db)):
