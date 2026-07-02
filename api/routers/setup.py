@@ -228,6 +228,8 @@ def create_products(product: ProductCreate, db: Session = Depends(get_db), _: di
             speedLimit=new_product.speed_limit,
             dataLimit=new_product.data_limit,
             createdAt=new_product.created_at,
+            routerId=str(new_product.router_id) if new_product.router_id else 1,
+            hostname=new_product.router.hostname if new_product.router else None    
         ),
     )
 
@@ -256,6 +258,8 @@ def update_product(id: int, product: ProductCreate, db: Session = Depends(get_db
             speedLimit=db_product.speed_limit,
             dataLimit=db_product.data_limit,
             createdAt=db_product.created_at,
+            routerId=str(db_product.router_id) if db_product.router_id else 1,
+            hostname=db_product.router.hostname if db_product.router else None
         ),
     )
 
@@ -532,8 +536,7 @@ def get_products_by_router(host: str = Query(..., description="Router hostname t
             dataLimit=p.data_limit or "Unlimited",
             createdAt=p.created_at,
             routerId=str(p.router_id) if p.router_id else 1,
-        )
-        for p in products
+            hostname = p.router.hostname if p.router else None )       for p in products
     ]
     return ProductsListResponse(message="Products fetched successfully", products=product_responses)
 
