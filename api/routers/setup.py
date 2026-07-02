@@ -124,7 +124,8 @@ def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_toke
     routers = db.query(RouterInfo).all()
     router_responses = []
     for r in routers:
-        stats = get_router_live_stats(host=r.ip_address, username=r.user_name, password=r.password, port=r.port)
+        host = r.tunnel_ip or r.ip_address
+        stats = get_router_live_stats(host=host, username=r.user_name, password=r.password, port=r.port)
         router_responses.append(RouterOut(
             id=r.id,
             name=r.name or "",
@@ -161,7 +162,8 @@ def ping_router(id: int, db: Session = Depends(get_db), _: dict = Depends(verify
     db_router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
     if not db_router:
         raise HTTPException(status_code=404, detail="Router not found")
-    stats = get_router_live_stats(host=db_router.ip_address, username=db_router.user_name,
+    host = db_router.tunnel_ip or db_router.ip_address
+    stats = get_router_live_stats(host=host, username=db_router.user_name,
                                    password=db_router.password, port=db_router.port)
     message = "Router is online" if stats["status"] == "online" else "Router is unreachable"
     return RouterPingResponse(
@@ -487,7 +489,9 @@ def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depe
         subprocess.run(
             [
                 "sshpass", "-p", db_router.password,
-                "scp", "-o", "StrictHostKeyChecking=no",
+                "scp",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "ConnectTimeout=8",
                 LOGIN_HTML_PATH,
                 f"{db_router.user_name}@{host}:hotspot/login.html",
             ],
@@ -497,9 +501,16 @@ def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depe
             timeout=15,
         )
     except subprocess.CalledProcessError as exc:
-        raise HTTPException(status_code=502, detail=f"Failed to deploy login page: {exc.stderr or exc}")
+        stderr = exc.stderr or ""
+        if "No route to host" in stderr or "Connection closed" in stderr or "Connection refused" in stderr:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Router at {host} is unreachable — WireGuard tunnel is not established yet. "
+                       "Run the setup script on the MikroTik first and wait for it to connect back.",
+            )
+        raise HTTPException(status_code=502, detail=f"scp failed: {stderr.strip()}")
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Timed out connecting to router via scp")
+        raise HTTPException(status_code=504, detail=f"Timed out connecting to {host} — tunnel may not be up yet")
 
     return {"message": f"login.html deployed to {host}:hotspot/login.html"}
 

@@ -739,6 +739,8 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
   /certificate sign api-cert ca=local-ca name=api-cert
 }
 /ip service set www-ssl certificate=api-cert disabled=no
+/ip service enable api
+/ip service set api allowed-address=$hubTunnelIp
  
 # ---- 10. Firewall: allow tunnel traffic BEFORE the default WAN drop rule ----
 :put "Step 10: Fixing firewall rule order..."
