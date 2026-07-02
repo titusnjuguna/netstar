@@ -109,7 +109,7 @@ def hotspot_pay(router_id: str, payload: HotspotPayRequest, db: Session = Depend
         product_id = int(payload.productId)
     except ValueError:
         return GeneralResponse(message="Invalid package selected", success=False, code=400)
-    product = db.query(Products).filter(Products.id == HotspotPayRequest.productId).first()
+    product = db.query(Products).filter(Products.id == payload.productId).first()
     if not product:
         return GeneralResponse(message="Package not found", success=False, code=404)
     try:
