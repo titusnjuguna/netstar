@@ -67,7 +67,7 @@ def get_subscriptions(page: int = Query(1, ge=1), db: Session = Depends(get_db),
     )
 
 
-@router.post('/callback', response_model=GeneralResponse, tags=["payment"])
+@router.post('/payment/callback', response_model=GeneralResponse, tags=["payment"])
 async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     try:
         json_data = await request.json()
