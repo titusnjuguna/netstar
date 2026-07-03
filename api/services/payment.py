@@ -23,7 +23,7 @@ def generate_secure_random_string(length):
     return random_string
 
 def mpesa_authentication(till_number,db):
-    merchant = int(till_number)
+    merchant = str(till_number)
     config = db.query(MpesaConfig).filter(MpesaConfig.paybill_number==merchant).first()
     if config:
         consumer_key= config.consumer_key
