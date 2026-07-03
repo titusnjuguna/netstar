@@ -99,8 +99,8 @@ def create_router(routerInfo: RouterCreate, _: dict = Depends(verify_token)):
 #exclude from auth verification since this is called by the router script
 
 @router.post("/hotspot/pay/{router_id}", response_model=GeneralResponse)
-def hotspot_pay(router_id: str, payload: HotspotPayRequest, db: Session = Depends(get_db)):
-    db_router = db.query(RouterInfo).filter(RouterInfo.id== router_id).first()
+def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depends(get_db)):
+    db_router = db.query(RouterInfo).filter(RouterInfo.id==router_id).first()
     if not db_router:
         return GeneralResponse(message="Router not found", success=False, code=404)
     if not db_router.till_number:
