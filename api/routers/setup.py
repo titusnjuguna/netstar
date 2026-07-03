@@ -113,7 +113,9 @@ def hotspot_pay(router_id: str, payload: HotspotPayRequest, db: Session = Depend
     if not product:
         return GeneralResponse(message="Package not found", success=False, code=404)
     try:
-        stk_push_request(amount=product.price, phone=payload.phone, till_number=db_router.till_number,product_id=product.id ,db=db)
+        response = stk_push_request(amount=product.price, phone=payload.phone, till_number=db_router.till_number,product_id=product.id ,db=db)
+        if response.status_code != 200:
+            return GeneralResponse(message=f"Error initiating payment: {response.text}", success=False, code=response.status_code)
         return GeneralResponse(message="Payment request sent. Check your phone.", success=True, code=200)
     except Exception as e:
         return GeneralResponse(message=f"Error initiating payment: {e}", success=False, code=400)
