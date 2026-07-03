@@ -100,7 +100,7 @@ def create_router(routerInfo: RouterCreate, _: dict = Depends(verify_token)):
 
 @router.post("/hotspot/pay/{router_id}", response_model=GeneralResponse)
 def hotspot_pay(router_id: str, payload: HotspotPayRequest, db: Session = Depends(get_db)):
-    db_router = db.query(RouterInfo).filter(RouterInfo.reg_token== router_id).first()
+    db_router = db.query(RouterInfo).filter(RouterInfo.id== router_id).first()
     if not db_router:
         return GeneralResponse(message="Router not found", success=False, code=404)
     if not db_router.till_number:
@@ -115,8 +115,8 @@ def hotspot_pay(router_id: str, payload: HotspotPayRequest, db: Session = Depend
     try:
         response = stk_push_request(amount=product.price, phone=payload.phone, till_number=db_router.till_number,product_id=product.id ,db=db)
         print(f"STK push request response API Query: {response}")
-        if response.status_code != 200:
-            return GeneralResponse(message=f"Error initiating payment: {response.text}", success=False, code=response.status_code)
+        if response.get("status_code") != 200:
+            return GeneralResponse(message=f"Error initiating payment: {response.get('details')}", success=False, code=response.get("status_code"))
         return GeneralResponse(message="Payment request sent. Check your phone.", success=True, code=200)
     except Exception as e:
         return GeneralResponse(message=f"Error initiating payment: {e}", success=False, code=400)
