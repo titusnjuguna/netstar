@@ -3,6 +3,8 @@ import os
 from dotenv import load_dotenv
 import requests
 from api.models.payment import HotspotPayments, PaymentConfig 
+from api.models.settings import MpesaConfig
+from api.schemas.payment import PaymentConfigRequest, PaymentConfigResponse, PayRequest
 from sqlalchemy.orm import Session
 from api.db.session import get_db
 from fastapi import Depends
@@ -22,7 +24,7 @@ def generate_secure_random_string(length):
 
 def mpesa_authentication(till_number,db):
     merchant = int(till_number)
-    config = db.query(PaymentConfig).filter(PaymentConfig.merchant==merchant).first()
+    config = db.query(MpesaConfig).filter(MpesaConfig.paybill_number==merchant).first()
     if config:
         consumer_key= config.consumer_key
         consumer_secret= config.consumer_secret
