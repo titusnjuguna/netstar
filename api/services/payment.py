@@ -66,13 +66,6 @@ def stk_push_request(amount,phone,till_number,product_id,db):
         print(f"STK push request sent. Response: {response.text}")
         #add the payment record to the database
         CheckoutRequestID = response.json().get("CheckoutRequestID", "")
-        #         {
-        #   "MerchantRequestID": "2654-4b64-97ff-b827b542881d3130",
-        #   "CheckoutRequestID": "ws_CO_1007202409152617172396192",
-        #   "ResponseCode": "0",
-        #   "ResponseDescription": "Success. Request accepted for processing",
-        #   "CustomerMessage": "Success. Request accepted for processing"
-        # }
         new_payment = HotspotPayments(
             amount = amount,
             payment_date = datetime.utcnow(),

@@ -67,40 +67,79 @@ def get_subscriptions(page: int = Query(1, ge=1), db: Session = Depends(get_db),
     )
 
 
-@router.post('/callback',response_model=GeneralResponse,tags=["payment"])
+@router.post('/callback', response_model=GeneralResponse, tags=["payment"])
 async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
-    request_object =  await request.body()
-    decoded_req_object = request_object.decode('utf-8').replace("'", '"')
-    json_data = json.loads(decoded_req_object)
-    # with open('TestingHot.json', 'w') as f:
-    #     json.dump(json_data,f)
     try:
-        db.query(HotspotPayments).filter(HotspotPayments.CheckoutRequestID==json_data['Body']['stkCallback']['CheckoutRequestID']).update({
-        "transaction_ref": json_data['Body']['stkCallback']['CallbackMetadata']['Item'][1]['Value'],
-    })
-    except:
-        db.query(HotspotPayments).filter(HotspotPayments.phone==json_data['Body']['stkCallback']['CallbackMetadata']['Item'][3]['Value']).update({
-            "transaction_ref": json_data['Body']['stkCallback']['CallbackMetadata']['Item'][1]['Value'],
-        })
-    #send whtsapp notification to user,to be added later
+        json_data = await request.json()
+    except Exception:
+        raw = await request.body()
+        json_data = json.loads(raw.decode('utf-8'))
 
-    return GeneralResponse(message='success',success=True,code=200)
+    stk = json_data.get("Body", {}).get("stkCallback", {})
+    checkout_id = stk.get("CheckoutRequestID")
+    result_code = stk.get("ResultCode")
+    result_desc = stk.get("ResultDesc", "")
 
+    print(f"M-Pesa callback: checkout={checkout_id} result_code={result_code} desc={result_desc}")
 
-@router.get('/hotspot/pay/status/{reference}',response_model=GeneralResponse,tags=["payment"])
-def check_payment_status(reference:str,db:Session = Depends(get_db)):
-    payment = db.query(HotspotPayments).filter(HotspotPayments.CheckoutRequestID==reference).first()
-    if payment:
-        if payment.transaction_ref != None:
-            #add connection to mikrotik and create a user and password for auto login and respond for successfull connection
-            
-            return GeneralResponse(message="Payment successful",success=True,code=200)      
-        else:
-            return GeneralResponse(message="Payment failed",success=False,code=400)
-    else:
-        return GeneralResponse(message="Payment not found",success=False,code=404)
+    payment = db.query(HotspotPayments).filter(
+        HotspotPayments.CheckoutRequestID == checkout_id
+    ).first()
+
+    if not payment:
+        # Safaricom expects 200 regardless — log and ack
+        print(f"Callback for unknown CheckoutRequestID: {checkout_id}")
+        return GeneralResponse(message="ok", success=True, code=200)
+
+    if result_code != 0:
+        # User cancelled, insufficient funds, timeout, etc.
+        payment.transaction_ref = f"FAILED:{result_code}:{result_desc}"
+        db.commit()
+        return GeneralResponse(message="ok", success=True, code=200)
+
+    # Extract metadata by Name — order-independent and safe
+    items = {
+        item["Name"]: item.get("Value")
+        for item in stk.get("CallbackMetadata", {}).get("Item", [])
+    }
+    receipt = str(items.get("MpesaReceiptNumber", ""))
+    paid_amount = items.get("Amount")
+
+    # Fraud check: paid amount must be >= expected amount
+    if paid_amount is not None and float(paid_amount) < float(payment.amount):
+        payment.transaction_ref = f"FRAUD:paid={paid_amount},expected={payment.amount}"
     
+        db.commit()
+        print(f"FRAUD detected: checkout={checkout_id} paid={paid_amount} expected={payment.amount}")
+        return GeneralResponse(message="ok", success=True, code=200)
 
+    payment.transaction_ref = receipt
+    payment.payment_date = datetime.utcnow()
+    db.commit()
+    print(f"Payment confirmed: receipt={receipt} checkout={checkout_id}")
+    return GeneralResponse(message="ok", success=True, code=200)
+
+
+@router.get('/hotspot/pay/status/{reference}', response_model=GeneralResponse, tags=["payment"])
+def check_payment_status(reference: str, db: Session = Depends(get_db)):
+    payment = db.query(HotspotPayments).filter(
+        HotspotPayments.CheckoutRequestID == reference
+    ).first()
+    if not payment:
+        return GeneralResponse(message="Payment not found", success=False, code=404)
+
+    ref = payment.transaction_ref or ""
+    if ref.startswith("FAILED:"):
+        _, code, *desc_parts = ref.split(":")
+        desc = ":".join(desc_parts)
+        return GeneralResponse(message=f"Payment failed: {desc}", success=False, code=400)
+    if ref.startswith("FRAUD:"):
+        return GeneralResponse(message="Payment amount mismatch — contact support", success=False, code=400)
+    if ref:
+        return GeneralResponse(message="Payment successful", success=True, code=200)
+    # transaction_ref still empty — STK sent but user hasn't acted yet
+    return GeneralResponse(message="Payment pending", success=False, code=202)
+    
 
 @router.post('/setup',response_model=None)
 def add_payment_config(payment:PaymentConfigRequest,db:Session = Depends(get_db), _: dict = Depends(verify_token)):
