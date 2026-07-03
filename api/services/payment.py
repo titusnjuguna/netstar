@@ -32,6 +32,7 @@ def mpesa_authentication(till_number,db):
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
         url = os.getenv("MPESA_AUTH_URL")
         response = requests.request("GET", url,headers = { 'Authorization': f'Basic {encoded_credentials}'})
+        print(f"MPESA Authentication response: {response.text}")
         return response.text.encode('utf8')
     else:
         return None 
@@ -44,7 +45,7 @@ def stk_push_request(amount,phone,till_number,product_id,db):
     password = f"{till_number}{passkey}{timestamp}"
     encoded_credentials = base64.b64encode(password.encode('utf-8')).decode('utf-8')
     headers = {'Content-Type': 'application/json', 'Authorization': f"Bearer {token}"}
-    till_number = 174379
+    till_number = till_number
     payload = {
         "BusinessShortCode": till_number,
         "Password": encoded_credentials,
