@@ -33,7 +33,7 @@ def mpesa_authentication(till_number,db):
         url = os.getenv("MPESA_AUTH_URL")
         response = requests.request("GET", url,headers = { 'Authorization': f'Basic {encoded_credentials}'})
         print(f"MPESA Authentication response: {response.text}")
-        return response.text.encode('utf8')
+        return response.json().get("access_token")
     else:
         return None 
     
