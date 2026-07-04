@@ -160,7 +160,8 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                     hotspot_password=password
                 )
             except Exception as e:
-                print(f"Failed to create hotspot user: {e}")
+                import traceback
+                print(f"Failed to create hotspot user: {e}\n{traceback.format_exc()}")
         return GeneralResponse(message="Payment successful", success=True, code=200)
     # transaction_ref still empty — STK sent but user hasn't acted yet
     return GeneralResponse(message="Payment pending", success=False, code=202)

@@ -411,10 +411,22 @@ def create_hotspot_user(router: RouterInfo, phone: str, duration_minutes: int, s
         add_kwargs['rate-limit'] = f"{speed_limit}M/{speed_limit}M"
     try:
         users.add(**add_kwargs)
-    except exceptions.RouterOsApiError:
-        existing = users.get(name=phone)
+        logger.info(f"Hotspot user created: {phone} on {host}")
+    except Exception as add_err:
+        logger.warning(f"Hotspot add failed ({add_err}), attempting update...")
+        # routeros_api raises !empty on filtered .get() — fetch all, filter in Python
+        try:
+            all_users = list(users.get())
+        except Exception:
+            all_users = []
+        existing = next((u for u in all_users if u.get('name') == phone), None)
         if existing:
-            users.set(id=existing[0]['id'], password=password, **{'limit-uptime': limit_uptime})
+            # RouterOS returns ID as '.id', not 'id'
+            dot_id = existing.get('.id') or existing.get('id')
+            users.set(id=dot_id, password=password, **{'limit-uptime': limit_uptime})
+            logger.info(f"Hotspot user updated: {phone} on {host}")
+        else:
+            raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
     return phone, password
 
 
