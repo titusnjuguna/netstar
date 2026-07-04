@@ -425,8 +425,9 @@ def create_hotspot_user(router: RouterInfo, phone: str, duration_minutes: int, s
         existing = next((u for u in all_users if u.get('name') == phone), None)
         if existing:
             dot_id = existing.get('.id') or existing.get('id')
-            users.set(id=dot_id, password=password, **{'limit-uptime': limit_uptime})
-            logger.info(f"Hotspot user updated: {phone} on {host}")
+            # Only reset password — do NOT touch limit-uptime, it would restart their session timer
+            users.set(id=dot_id, password=password)
+            logger.info(f"Hotspot user password refreshed: {phone} on {host}")
         else:
             raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
 
