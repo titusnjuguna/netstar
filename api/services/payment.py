@@ -77,7 +77,7 @@ def stk_push_request(amount,phone,till_number,product_id,db):
         )
         db.add(new_payment)
         db.commit()
-        return {"message": "STK push request sent successfully", "details": response.text, "status_code": response.status_code}
+        return {"message": "STK push request sent successfully", "payment_ref": CheckoutRequestID,"details": response.text, "status_code": response.status_code}
     else:
         print(f"Error occurred while making STK push request: {response.text}")
         return {"error": "Failed to initiate STK push request", "details": response.text, "status_code": response.status_code}

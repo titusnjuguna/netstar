@@ -397,6 +397,27 @@ def get_router_connection(ROUTER_IP,ROUTER_USERNAME,ROUTER_PASSWORD):
     )
     return connection.get_api()
 
+def create_hotspot_user(router: RouterInfo, phone: str, duration_minutes: int, speed_limit: str, password: str) -> tuple:
+    host = router.tunnel_ip or router.ip_address
+    api = get_router_connection(host, router.user_name, router.password)
+    users = api.get_resource('/ip/hotspot/user')
+    limit_uptime = f"{duration_minutes}m"
+    add_kwargs = {
+        'name': phone,
+        'password': password,
+        'limit-uptime': limit_uptime,
+    }
+    if speed_limit and speed_limit.lower() != 'unlimited':
+        add_kwargs['rate-limit'] = f"{speed_limit}M/{speed_limit}M"
+    try:
+        users.add(**add_kwargs)
+    except exceptions.RouterOsApiError:
+        existing = users.get(name=phone)
+        if existing:
+            users.set(id=existing[0]['id'], password=password, **{'limit-uptime': limit_uptime})
+    return phone, password
+
+
 def add_user_to_router(username, password, rate_limit):
     api = get_router_connection()
     api.get_resource('/ip/hotspot/user').add(

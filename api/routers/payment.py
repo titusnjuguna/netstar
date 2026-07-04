@@ -7,6 +7,7 @@ from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,Paym
 from api.models.payment import *
 from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
+from api.services.setup import create_hotspot_user
 from api.services.auth import verify_token
 import json
 router=APIRouter(
@@ -136,6 +137,28 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
     if ref.startswith("FRAUD:"):
         return GeneralResponse(message="Payment amount mismatch — contact support", success=False, code=400)
     if ref:
+        product = db.query(Products).filter(Products.id == payment.product_id).first()
+        router = db.query(RouterInfo).filter(RouterInfo.id == product.router_id).first() if product else None
+        if product and router:
+            # Derive password from receipt — deterministic so polling is safe
+            hotspot_password = ref[-8:]
+            try:
+                username, password = create_hotspot_user(
+                    router=router,
+                    phone=payment.phone,
+                    duration_minutes=product.duration,
+                    speed_limit=product.speed_limit,
+                    password=hotspot_password,
+                )
+                return GeneralResponse(
+                    message="Payment successful",
+                    success=True,
+                    code=200,
+                    hotspot_username=username,
+                    hotspot_password=password,
+                )
+            except Exception as e:
+                print(f"Failed to create hotspot user: {e}")
         return GeneralResponse(message="Payment successful", success=True, code=200)
     # transaction_ref still empty — STK sent but user hasn't acted yet
     return GeneralResponse(message="Payment pending", success=False, code=202)

@@ -117,7 +117,7 @@ def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depend
         print(f"STK push request response API Query: {response}")
         if response.get("status_code") != 200:
             return GeneralResponse(message=f"Error initiating payment: {response.get('details')}", success=False, code=response.get("status_code"))
-        return GeneralResponse(message="Payment request sent. Check your phone.", success=True, code=200)
+        return GeneralResponse(message="Payment request sent.Check your phone.",payment_ref = response.get("payment_ref"), success=True, code=200)
     except Exception as e:
         return GeneralResponse(message=f"Error initiating payment: {e}", success=False, code=400)
 
