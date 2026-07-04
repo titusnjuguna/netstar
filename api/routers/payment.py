@@ -143,19 +143,21 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
             # Derive password from receipt — deterministic so polling is safe
             hotspot_password = ref[-8:]
             try:
-                username, password = create_hotspot_user(
+                username,password = create_hotspot_user(
                     router=router,
                     phone=payment.phone,
                     duration_minutes=product.duration,
                     speed_limit=product.speed_limit,
                     password=hotspot_password,
                 )
+                print(f"Hotspot user created: {username} on router {router.name}-{password}-")
                 return GeneralResponse(
                     message="Payment successful",
                     success=True,
                     code=200,
+                    payment_ref=ref,
                     hotspot_username=username,
-                    hotspot_password=password,
+                    hotspot_password=password
                 )
             except Exception as e:
                 print(f"Failed to create hotspot user: {e}")
