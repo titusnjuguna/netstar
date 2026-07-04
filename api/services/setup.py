@@ -397,36 +397,55 @@ def get_router_connection(ROUTER_IP,ROUTER_USERNAME,ROUTER_PASSWORD):
     )
     return connection.get_api()
 
+def _parse_speed_mbps(speed_limit: str) -> str | None:
+    import re
+    if not speed_limit or speed_limit.lower() == 'unlimited':
+        return None
+    m = re.search(r'(\d+(?:\.\d+)?)', speed_limit)
+    if not m:
+        return None
+    num = m.group(1).rstrip('.')
+    return f"{num}M/{num}M"
+
+
 def create_hotspot_user(router: RouterInfo, phone: str, duration_minutes: int, speed_limit: str, password: str) -> tuple:
     host = router.tunnel_ip or router.ip_address
     api = get_router_connection(host, router.user_name, router.password)
     users = api.get_resource('/ip/hotspot/user')
     limit_uptime = f"{duration_minutes}m"
-    add_kwargs = {
-        'name': phone,
-        'password': password,
-        'limit-uptime': limit_uptime,
-    }
-    if speed_limit and speed_limit.lower() != 'unlimited':
-        add_kwargs['rate-limit'] = f"{speed_limit}M/{speed_limit}M"
     try:
-        users.add(**add_kwargs)
+        users.add(**{'name': phone, 'password': password, 'limit-uptime': limit_uptime})
         logger.info(f"Hotspot user created: {phone} on {host}")
     except Exception as add_err:
         logger.warning(f"Hotspot add failed ({add_err}), attempting update...")
-        # routeros_api raises !empty on filtered .get() — fetch all, filter in Python
         try:
             all_users = list(users.get())
         except Exception:
             all_users = []
         existing = next((u for u in all_users if u.get('name') == phone), None)
         if existing:
-            # RouterOS returns ID as '.id', not 'id'
             dot_id = existing.get('.id') or existing.get('id')
             users.set(id=dot_id, password=password, **{'limit-uptime': limit_uptime})
             logger.info(f"Hotspot user updated: {phone} on {host}")
         else:
             raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
+
+    # Apply rate limit via simple queue — correct place for per-user bandwidth control
+    rate = _parse_speed_mbps(speed_limit)
+    if rate:
+        queues = api.get_resource('/queue/simple')
+        try:
+            queues.add(**{'name': phone, 'target': f'<{phone}>', 'max-limit': rate})
+        except Exception:
+            try:
+                all_queues = list(queues.get())
+            except Exception:
+                all_queues = []
+            existing_q = next((q for q in all_queues if q.get('name') == phone), None)
+            if existing_q:
+                dot_id = existing_q.get('.id') or existing_q.get('id')
+                queues.set(id=dot_id, **{'max-limit': rate})
+
     return phone, password
 
 
