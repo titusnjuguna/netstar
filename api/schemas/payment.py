@@ -39,6 +39,9 @@ class GeneralResponse(BaseModel):
     message: str
     success: bool
     code: int
+    payment_ref: Optional[str] = None
+    hotspot_username: Optional[str] = None
+    hotspot_password: Optional[str] = None
 
 
 class SubscriptionOut(BaseModel):
