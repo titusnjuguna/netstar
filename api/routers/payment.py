@@ -147,7 +147,7 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                     router=router,
                     phone=payment.phone,
                     duration_minutes=product.duration,
-                    speed_limit=product.speed_limit,
+                    profile_name=product.name,
                     password=hotspot_password,
                 )
                 print(f"Hotspot user ready: {username} on router {router.name}")
