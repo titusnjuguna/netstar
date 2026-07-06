@@ -563,7 +563,7 @@ def get_profile_by_name(router, profile_name: str):
 
     return None
 
-
+d
 def match_product_to_profile(router, product):
     """
     Match a Product to its corresponding MikroTik hotspot profile by name.
@@ -571,7 +571,7 @@ def match_product_to_profile(router, product):
 
     Returns the matched profile dict, or None if no match found.
     """
-    profile_name = f'profile-{product.duration}MIN'
+    profile_name = product.name
     return get_profile_by_name(router, profile_name)
 
 

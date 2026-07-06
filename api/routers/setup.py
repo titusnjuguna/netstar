@@ -198,7 +198,7 @@ def check_get_device_resource(id: int, db: Session = Depends(get_db), _: dict = 
             return RouterDetail(success=True,msg="Router is offline",data={"cpu":0,"uptime":0,"status":"Offline"})
 
 @router.post("/v1/create/product", response_model=ProductDetailResponse)
-def create_products(product: ProductCreate, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+def create_products(product: ProductCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     #check duration is greater than 1 if less convert to minutes and store in db
     if product.duration >= 1:
         new_duration = float(product.duration) * 60
@@ -206,8 +206,7 @@ def create_products(product: ProductCreate, db: Session = Depends(get_db), _: di
     router = db.query(RouterInfo).filter(RouterInfo.id == product.routerId).first()
     if not router:
         raise HTTPException(status_code=404,detail="Router not found")
-    background_tasks = BackgroundTasks()
-    background_tasks.add_task(match_product_to_profile,router,new_duration)
+
     new_product = Products(
         name=product.name,
         price=product.price,
@@ -219,6 +218,7 @@ def create_products(product: ProductCreate, db: Session = Depends(get_db), _: di
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
+    background_tasks.add_task(match_product_to_profile, router, new_product)
     return ProductDetailResponse(
         message="Product created successfully",
         name = new_product.router.hotspot_name if new_product.router else "Unknown",
