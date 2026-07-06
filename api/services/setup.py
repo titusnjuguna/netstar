@@ -563,7 +563,6 @@ def get_profile_by_name(router, profile_name: str):
 
     return None
 
-d
 def match_product_to_profile(router, product):
     """
     Match a Product to its corresponding MikroTik hotspot profile by name.
