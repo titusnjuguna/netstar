@@ -150,7 +150,7 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                     speed_limit=product.speed_limit,
                     password=hotspot_password,
                 )
-                print(f"Hotspot user created: {username} on router {router.name}-{password}-")
+                print(f"Hotspot user ready: {username} on router {router.name}")
                 return GeneralResponse(
                     message="Payment successful",
                     success=True,

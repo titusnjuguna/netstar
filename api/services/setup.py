@@ -408,47 +408,36 @@ def _parse_speed_mbps(speed_limit: str) -> str | None:
     return f"{num}M/{num}M"
 
 
-def create_hotspot_user(router: RouterInfo, phone: str, duration_minutes: int, speed_limit: str, password: str) -> tuple:
+def create_hotspot_user(router, phone, duration_minutes, profile_name, password):
     host = router.tunnel_ip or router.ip_address
     api = get_router_connection(host, router.user_name, router.password)
     users = api.get_resource('/ip/hotspot/user')
     limit_uptime = f"{duration_minutes}m"
+
     try:
-        users.add(**{'name': phone, 'password': password, 'limit-uptime': limit_uptime})
+        users.add(**{
+            'name': phone,
+            'password': password,
+            'limit-uptime': limit_uptime,
+            'profile': profile_name,
+        })
         logger.info(f"Hotspot user created: {phone} on {host}")
     except Exception as add_err:
-        logger.warning(f"Hotspot add failed ({add_err}), attempting update...")
-        try:
-            all_users = list(users.get())
-        except Exception:
-            all_users = []
+        # User already exists — renew them with a fresh session
+        all_users = list(users.get())
         existing = next((u for u in all_users if u.get('name') == phone), None)
-        if existing:
-            dot_id = existing.get('.id') or existing.get('id')
-            # Only reset password — do NOT touch limit-uptime, it would restart their session timer
-            users.set(id=dot_id, password=password)
-            logger.info(f"Hotspot user password refreshed: {phone} on {host}")
-        else:
+        if not existing:
             raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
-
-    # Apply rate limit via simple queue — correct place for per-user bandwidth control
-    rate = _parse_speed_mbps(speed_limit)
-    if rate:
-        queues = api.get_resource('/queue/simple')
+        dot_id = existing.get('.id')
+        users.set(id=dot_id, password=password,
+                  **{'limit-uptime': limit_uptime, 'profile': profile_name})
         try:
-            queues.add(**{'name': phone, 'target': f'<{phone}>', 'max-limit': rate})
+            users.call('reset-counters', {'.id': dot_id})
         except Exception:
-            try:
-                all_queues = list(queues.get())
-            except Exception:
-                all_queues = []
-            existing_q = next((q for q in all_queues if q.get('name') == phone), None)
-            if existing_q:
-                dot_id = existing_q.get('.id') or existing_q.get('id')
-                queues.set(id=dot_id, **{'max-limit': rate})
+            pass
+        logger.info(f"Hotspot user renewed: {phone} on {host}")
 
     return phone, password
-
 
 def add_user_to_router(username, password, rate_limit):
     api = get_router_connection()
