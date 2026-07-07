@@ -414,38 +414,39 @@ def create_hotspot_user(router, phone, duration_minutes, profile_name, password)
     users = api.get_resource('/ip/hotspot/user')
     limit_uptime = f"{duration_minutes}m"
 
+    def _add(prof):
+        users.add(**{'name': phone, 'password': password,
+                     'limit-uptime': limit_uptime, 'profile': prof})
+
+    def _update():
+        # We know ≥1 user exists here so .get() won't return !empty
+        all_users = list(users.get())
+        existing = next((u for u in all_users if u.get('name') == phone), None)
+        if not existing:
+            raise RuntimeError(f"User '{phone}' not found for update on {host}")
+        dot_id = existing.get('.id')
+        logger.debug("Updating user %s .id=%s keys=%s", phone, dot_id, list(existing.keys()))
+        users.set(**{'.id': dot_id, 'password': password,
+                     'limit-uptime': limit_uptime, 'profile': profile_name})
+        logger.info("Hotspot user updated: %s on %s", phone, host)
+
     try:
-        users.add(**{
-            'name': phone,
-            'password': password,
-            'limit-uptime': limit_uptime,
-            'profile': profile_name,
-        })
+        _add(profile_name)
         logger.info("Hotspot user created: %s on %s", phone, host)
     except Exception as add_err:
-        if 'already have user' in str(add_err).lower():
-            # Returning customer — remove old entry and re-add with fresh session and new password
-            try:
-                users.remove(**{'name': phone})
-            except Exception:
-                pass
-            users.add(**{
-                'name': phone,
-                'password': password,
-                'limit-uptime': limit_uptime,
-                'profile': profile_name,
-            })
-            logger.info("Hotspot user renewed: %s on %s", phone, host)
-        elif 'does not match any value of profile' in str(add_err).lower():
-            # Profile missing — fall back to default so the user can still connect
+        err_str = str(add_err).lower()
+        if 'already have user' in err_str:
+            _update()
+        elif 'does not match any value of profile' in err_str:
             logger.warning("Profile '%s' not found on %s, falling back to default", profile_name, host)
-            users.add(**{
-                'name': phone,
-                'password': password,
-                'limit-uptime': limit_uptime,
-                'profile': 'default',
-            })
-            logger.info("Hotspot user created with default profile: %s on %s", phone, host)
+            try:
+                _add('default')
+                logger.info("Hotspot user created with default profile: %s on %s", phone, host)
+            except Exception as fallback_err:
+                if 'already have user' in str(fallback_err).lower():
+                    _update()
+                else:
+                    raise RuntimeError(f"Cannot create hotspot user '{phone}': {fallback_err}")
         else:
             raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
 
