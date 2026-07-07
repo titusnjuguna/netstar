@@ -454,10 +454,17 @@ def add_user_to_router(username, password, rate_limit):
         max_limit=rate_limit
     )
 
-def remove_user_from_router(username):
-    api = get_router_connection()
-    api.get_resource('/ip/hotspot/user').remove(name=username)
-    api.get_resource('/queue/simple').remove(name=username)
+def remove_user_from_router(router: RouterInfo, username: str):
+    host = router.tunnel_ip or router.ip_address
+    api = get_router_connection(host, router.user_name, router.password)
+    try:
+        api.get_resource('/ip/hotspot/user').remove(**{'name': username})
+    except Exception as e:
+        logger.warning("Could not remove hotspot user %s: %s", username, e)
+    try:
+        api.get_resource('/queue/simple').remove(**{'name': username})
+    except Exception:
+        pass  # queue entry may not exist
 
 def update_user_rate_limit(username, new_rate_limit):
     api = get_router_connection()
@@ -566,9 +573,8 @@ def match_product_to_profile(router, product):
             all_profiles = []
         existing = next((p for p in all_profiles if p.get('name') == profile_name), None)
         if existing:
-            logger.info("Profile '%s' already exists on %s", profile_name, host)
-            connection.disconnect()
-            return
+            profiles.remove(**{'name': profile_name})
+            logger.info("Profile '%s' deleted on %s", profile_name, host)
         profiles.add(**{'name': profile_name, 'rate-limit': speed, 'shared-users': '1'})
         logger.info("Created hotspot profile '%s' (%s) on %s", profile_name, speed, host)
         connection.disconnect()
