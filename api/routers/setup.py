@@ -161,9 +161,7 @@ def ping_router(id: int, db: Session = Depends(get_db), _: dict = Depends(verify
     db_router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
     if not db_router:
         raise HTTPException(status_code=404, detail="Router not found")
-    host = db_router.tunnel_ip or db_router.ip_address
-    stats = get_router_live_stats(host=host, username=db_router.user_name,
-                                   password=db_router.password, port=db_router.port)
+    stats = MikrotikOperation(router=db_router).get_router_live_stats()
     message = "Router is online" if stats["status"] == "online" else "Router is unreachable"
     return RouterPingResponse(
         message=message,
@@ -214,7 +212,8 @@ def create_products(product: ProductCreate, background_tasks: BackgroundTasks, d
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
-    background_tasks.add_task(match_product_to_profile, router, new_product)
+    mikrotik_op = MikrotikOperation(router=router,product=new_product)
+    background_tasks.add_task(mikrotik_op.match_product_to_profile)
     return ProductDetailResponse(
         message="Product created successfully",
         name = new_product.router.hotspot_name if new_product.router else "Unknown",
