@@ -158,7 +158,8 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                     code=200,
                     payment_ref=ref,
                     hotspot_username=username,
-                    hotspot_password=password
+                    hotspot_password=password,
+                    login_url=f"http://10.10.10.1/login"
                 )
             except Exception as e:
                 import traceback
