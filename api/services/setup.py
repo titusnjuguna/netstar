@@ -537,41 +537,41 @@ def get_available_user_profiles(router):
 
 def get_profile_by_name(router, profile_name: str):
     profiles = get_available_user_profiles(router)
-    for profile in profiles:
-        if profile.get('name') == profile_name:
-            return profile
-        #create a new profile with the name and return it
-        try:
-            connection = RouterOsApiPool(
-                host=router.ip_address,
-                username=router.user_name,
-                password=router.password,
-                plaintext_login=True,
-            )
-            connection.set_timeout(5)
-            api = connection.get_api()
-            api.get_resource('/ip/hotspot/user/profile').add(
-                name=profile_name,
-                rate_limit="3M/3M",
-                shared_users=1
-            )
-            connection.disconnect()
-            return {"name": profile_name, "rate_limit": "3M/3M", "shared_users": 1}
-        except exceptions.RouterOsApiConnectionError as e:
-            logger.warning("Could not create profile on %s: %s", router.ip_address, e)
-            return None
+    return next((p for p in profiles if p.get('name') == profile_name), None)
 
-    return None
 
 def match_product_to_profile(router, product):
     """
-    Match a Product to its corresponding MikroTik hotspot profile by name.
-    The product's speedLimit field is used as the profile name.
-
-    Returns the matched profile dict, or None if no match found.
+    Ensure a hotspot user profile exists on the router for this product.
+    Creates it if missing. Called as a background task after product creation.
     """
     profile_name = product.name
-    return get_profile_by_name(router, profile_name)
+    speed = _parse_speed_mbps(product.speed_limit) or "2M/2M"
+    host = router.tunnel_ip or router.ip_address
+    try:
+        connection = RouterOsApiPool(
+            host=host,
+            username=router.user_name,
+            password=router.password,
+            plaintext_login=True,
+        )
+        connection.set_timeout(5)
+        api = connection.get_api()
+        profiles = api.get_resource('/ip/hotspot/user/profile')
+        try:
+            all_profiles = list(profiles.get())
+        except Exception:
+            all_profiles = []
+        existing = next((p for p in all_profiles if p.get('name') == profile_name), None)
+        if existing:
+            logger.info("Profile '%s' already exists on %s", profile_name, host)
+            connection.disconnect()
+            return
+        profiles.add(**{'name': profile_name, 'rate-limit': speed, 'shared-users': '1'})
+        logger.info("Created hotspot profile '%s' (%s) on %s", profile_name, speed, host)
+        connection.disconnect()
+    except Exception as e:
+        logger.warning("Failed to create profile '%s' on %s: %s", profile_name, host, e)
 
 
 def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
