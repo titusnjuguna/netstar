@@ -184,7 +184,7 @@ class MikrotikOperation:
     
     def get_profile_by_name(self):
         profiles = self.get_available_user_profiles()
-        return next((p for p in profiles if p.get('name') == self.profile_name), None)
+        return next((p for p in profiles if p.get('name') == self.product.name), None)
 
     def match_product_to_profile(self):
         return self.get_profile_by_name()
