@@ -124,7 +124,7 @@ def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_toke
     router_responses = []
     for r in routers:
         host = r.tunnel_ip or r.ip_address
-        stats = get_router_live_stats(host=host, username=r.user_name, password=r.password, port=r.port)
+        stats = MikrotikOperation(router=r).get_router_live_stats()
         router_responses.append(RouterOut(
             id=r.id,
             name=r.name or "",
