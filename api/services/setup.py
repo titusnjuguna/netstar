@@ -576,20 +576,21 @@ def match_product_to_profile(router, product):
         )
         connection.set_timeout(5)
         api = connection.get_api()
-        profiles = api.get_resource('/ip/hotspot/user/profile')
-        try:
-            all_profiles = list(profiles.get())
-        except Exception:
-            all_profiles = []
-        existing = next((p for p in all_profiles if p.get('name') == profile_name), None)
-        if existing:
-            profiles.remove(**{'name': profile_name})
-            logger.info("Profile '%s' deleted on %s", profile_name, host)
-        profiles.add(**{'name': profile_name, 'rate-limit': speed, 'shared-users': '1'})
+        # Skip .get() check — it causes !empty / cancel issues with routeros_api.
+        # Just try to add; catch the "already exists" error gracefully.
+        api.get_resource('/ip/hotspot/user/profile').add(**{
+            'name': profile_name,
+            'rate-limit': speed,
+            'shared-users': '1',
+        })
         logger.info("Created hotspot profile '%s' (%s) on %s", profile_name, speed, host)
         connection.disconnect()
     except Exception as e:
-        logger.warning("Failed to create profile '%s' on %s: %s", profile_name, host, e)
+        err = str(e).lower()
+        if 'already have' in err or 'already exists' in err or 'failure' in err:
+            logger.info("Profile '%s' already exists on %s", profile_name, host)
+        else:
+            logger.warning("Failed to create profile '%s' on %s: %s", profile_name, host, e)
 
 
 def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
