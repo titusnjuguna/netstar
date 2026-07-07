@@ -117,7 +117,7 @@ class MikrotikOperation:
                     print(f"CPU Load: {data.get('cpu-load')}%")
             else:
                 print("Router is unreachable or returned no data.")
-            self.api.disconnect()
+            self.connection.disconnect()
         except exceptions.RouterOsApiConnectionError:
             print("Failed to connect. Router is offline or inaccessible.")
         except exceptions.RouterOsApiCommunicationError as e:
@@ -154,7 +154,7 @@ class MikrotikOperation:
             api = self.api
             resource = list(api.get_resource('/system/resource').get())
             active = list(api.get_resource('/ip/hotspot/active').get())
-            self.api.disconnect()
+            self.connection.disconnect()
             info = resource[0] if resource else {}
             total_memory = int(info.get('total-memory', 0) or 0)
             free_memory = int(info.get('free-memory', 0) or 0)
@@ -175,7 +175,7 @@ class MikrotikOperation:
     def get_available_user_profiles(self):
         self.__initiate_connection()
         profiles = list(self.api.get_resource('/ip/hotspot/user/profile').get())
-        self.api.disconnect()
+        self.connection.disconnect()
         if not profiles:
             logger.warning(f"Could not fetch profiles from %s: %s",self.host, "No profiles found")
             return []
