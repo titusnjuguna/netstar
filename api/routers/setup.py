@@ -30,12 +30,8 @@ def create_router(routerInfo: RouterCreate, _: dict = Depends(verify_token)):
         new_router = None
         try:
             yield sse("connect", "in_progress", "Connecting to MikroTik device...")
-            stats = get_router_live_stats(
-                host=routerInfo.ip_address,
-                username=routerInfo.username,
-                password=routerInfo.password,
-                port=routerInfo.port,
-            )
+            stats = MikrotikOperation(router=routerInfo).get_router_live_stats()
+           
             if stats["status"] != "online":
                 reason = stats.get("error") or "check IP address and credentials"
                 yield sse("connect", "failed", f"Could not reach MikroTik — {reason}")
