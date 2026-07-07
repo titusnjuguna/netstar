@@ -149,12 +149,12 @@ class MikrotikOperation:
 
     def get_router_live_stats(self):
         try:
-            connection = self.__initiate_connection()
-            connection.set_timeout(5)
-            api = connection.get_api()
+            self.__initiate_connection()
+            self.api.set_timeout(5)
+            api = self.api.get_api()
             resource = list(api.get_resource('/system/resource').get())
             active = list(api.get_resource('/ip/hotspot/active').get())
-            connection.disconnect()
+            self.api.disconnect()
 
             info = resource[0] if resource else {}
             total_memory = int(info.get('total-memory', 0) or 0)
@@ -165,12 +165,12 @@ class MikrotikOperation:
                 "status": "online",
                 "cpuLoad": int(info.get('cpu-load', 0) or 0),
                 "memoryUsage": memory_usage,
-                "uptime": format_uptime(info.get('uptime', '')),
+                "uptime": self.format_uptime(info.get('uptime', '')),
                 "activeUsers": len(active),
                 "error": None,
             }
         except Exception as e:
-            logger.warning("Could not connect to MikroTik at %s:%s — %s", host, port, e)
+            logger.warning("Could not connect to MikroTik at %s:%s — %s", self.host, self.port, e)
             return {"status": "offline", "cpuLoad": 0, "memoryUsage": 0, "uptime": "0d 0h 0m", "activeUsers": 0, "error": str(e)}
         
 
