@@ -436,6 +436,16 @@ def create_hotspot_user(router, phone, duration_minutes, profile_name, password)
                 'profile': profile_name,
             })
             logger.info("Hotspot user renewed: %s on %s", phone, host)
+        elif 'does not match any value of profile' in str(add_err).lower():
+            # Profile missing — fall back to default so the user can still connect
+            logger.warning("Profile '%s' not found on %s, falling back to default", profile_name, host)
+            users.add(**{
+                'name': phone,
+                'password': password,
+                'limit-uptime': limit_uptime,
+                'profile': 'default',
+            })
+            logger.info("Hotspot user created with default profile: %s on %s", phone, host)
         else:
             raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
 

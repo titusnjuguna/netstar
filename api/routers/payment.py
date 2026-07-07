@@ -7,7 +7,7 @@ from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,Paym
 from api.models.payment import *
 from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
-from api.services.setup import create_hotspot_user
+from api.services.setup import create_hotspot_user, match_product_to_profile
 from api.services.auth import verify_token
 import json
 router=APIRouter(
@@ -140,6 +140,8 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
         product = db.query(Products).filter(Products.id == payment.product_id).first()
         router = db.query(RouterInfo).filter(RouterInfo.id == product.router_id).first() if product else None
         if product and router:
+            # Ensure the hotspot profile exists on the router before adding the user
+            match_product_to_profile(router, product)
             # Derive password from receipt — deterministic so polling is safe
             hotspot_password = ref[-8:]
             try:
