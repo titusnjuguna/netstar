@@ -23,6 +23,7 @@ from jinja2 import Environment, FileSystemLoader
 import os
 from dotenv import load_dotenv
 from sqlalchemy import  select
+import re
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -46,81 +47,141 @@ class _Settings:
 
 settings = _Settings()
 
+class MikrotikOperation:
+    def __init__(self,router:RouterInfo,**kwargs):
+        self.router = router
+        self.host = router.tunnel_ip or router.ip_address
+        self.username = router.user_name
+        self.password = router.password
+        self.port = kwargs.get("port", 8728)
+        self.connection = None
+        self.api = None
+        self.product = kwargs.get("product")
 
-def check_mikrotik_status(host,username,password,port):
-    try:
-        # Connect to the MikroTik API
-        connection = RouterOsApiPool(host, username=username, password=password, port=port)
-        api = connection.get_api()
+    def __initiate_connection(self):
+        try:
+            self.connection = RouterOsApiPool(
+                host=self.host,
+                username=self.username,
+                password=self.password,
+                port=self.port,
+                plaintext_login=True
+            )
+            self.api = self.connection.get_api()
+        except exceptions.RouterOsApiConnectionError:
+            raise HTTPException(status_code=503, detail="Router is offline or inaccessible.")
+        except exceptions.RouterOsApiCommunicationError as e:
+            raise HTTPException(status_code=500, detail=f"Communication error: {e}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
+        
+    def _parse_speed_mbps(self):
+    
+        speed_limit = self.product.speed_limit if self.product else None
+        if not speed_limit or speed_limit.lower() == 'unlimited':
+            return None
+        m = re.search(r'(\d+(?:\.\d+)?)',speed_limit)
+        if not m:
+            return None
+        num = m.group(1).rstrip('.')
+        return f"{num}M/{num}M"
+        
+    def create_router_profile_product(self):
+        if not self.api:
+            self.__initiate_connection()
+        profile_name = self.product.name
+        speed = self._parse_speed_mbps(self.product.speed_limit) or "2M/2M"
+        try:
+            self.api.get_resource('/ip/hotspot/user/profile').add(**{
+                'name': profile_name,
+                'rate-limit': speed,
+                'shared-users': '1',
+            })
+            logger.info("Created hotspot profile '%s' (%s) on %s", profile_name, speed, self.host)
+        except Exception as e:
+            err = str(e).lower()
+            if 'already have' in err or 'already exists' in err or 'failure' in err:
+                logger.info("Profile '%s' already exists on %s", profile_name, self.host)
+            else:
+                logger.warning("Failed to create profile '%s' on %s: %s", profile_name, self.host, e)
 
-        # Perform a simple command to test connectivity (e.g., fetch system resource details)
-        response = api.get_resource('/system/resource').get()
-        if response:
-            print("Router is online!")
-            for data in response:
-                print(f"Uptime: {data.get('uptime')}")
-                print(f"CPU Load: {data.get('cpu-load')}%")
-        else:
-            print("Router is unreachable or returned no data.")
+    def check_mikrotik_status(self):
+        try:
+            api = self.__initiate_connection().get_api()
+            response = api.get_resource('/system/resource').get()
+            if response:
+                print("Router is online!")
+                for data in response:
+                    print(f"Uptime: {data.get('uptime')}")
+                    print(f"CPU Load: {data.get('cpu-load')}%")
+            else:
+                print("Router is unreachable or returned no data.")
+            self.connection.disconnect()
+        except exceptions.RouterOsApiConnectionError:
+            print("Failed to connect. Router is offline or inaccessible.")
+        except exceptions.RouterOsApiCommunicationError as e:
+            print(f"Communication error: {e}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
-        # Disconnect
-        connection.disconnect()
 
-    except exceptions.RouterOsApiConnectionError:
-        print("Failed to connect. Router is offline or inaccessible.")
-    except exceptions.RouterOsApiCommunicationError as e:
-        print(f"Communication error: {e}")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-
-def format_uptime(uptime_str):
-    if not uptime_str:
-        return "0d 0h 0m"
-    weeks = days = hours = minutes = 0
-    num = ""
-    for ch in uptime_str:
-        if ch.isdigit():
-            num += ch
-            continue
-        value = int(num) if num else 0
-        if ch == 'w':
-            weeks = value
-        elif ch == 'd':
-            days = value
-        elif ch == 'h':
-            hours = value
-        elif ch == 'm':
-            minutes = value
+    def format_uptime(uptime_str):
+        if not uptime_str:
+            return "0d 0h 0m"
+        weeks = days = hours = minutes = 0
         num = ""
-    return f"{weeks * 7 + days}d {hours}h {minutes}m"
+        for ch in uptime_str:
+            if ch.isdigit():
+                num += ch
+                continue
+            value = int(num) if num else 0
+            if ch == 'w':
+                weeks = value
+            elif ch == 'd':
+                days = value
+            elif ch == 'h':
+                hours = value
+            elif ch == 'm':
+                minutes = value
+            num = ""
+        return f"{weeks * 7 + days}d {hours}h {minutes}m"
 
 
-def get_router_live_stats(host, username, password, port):
-    try:
-        connection = RouterOsApiPool(host, username=username, password=password, port=port)
-        connection.set_timeout(5)
-        api = connection.get_api()
-        resource = list(api.get_resource('/system/resource').get())
-        active = list(api.get_resource('/ip/hotspot/active').get())
-        connection.disconnect()
+    def get_router_live_stats(self):
+        try:
+            connection = self.__initiate_connection()
+            connection.set_timeout(5)
+            api = connection.get_api()
+            resource = list(api.get_resource('/system/resource').get())
+            active = list(api.get_resource('/ip/hotspot/active').get())
+            connection.disconnect()
 
-        info = resource[0] if resource else {}
-        total_memory = int(info.get('total-memory', 0) or 0)
-        free_memory = int(info.get('free-memory', 0) or 0)
-        memory_usage = round((total_memory - free_memory) / total_memory * 100) if total_memory else 0
+            info = resource[0] if resource else {}
+            total_memory = int(info.get('total-memory', 0) or 0)
+            free_memory = int(info.get('free-memory', 0) or 0)
+            memory_usage = round((total_memory - free_memory) / total_memory * 100) if total_memory else 0
 
-        return {
-            "status": "online",
-            "cpuLoad": int(info.get('cpu-load', 0) or 0),
-            "memoryUsage": memory_usage,
-            "uptime": format_uptime(info.get('uptime', '')),
-            "activeUsers": len(active),
-            "error": None,
-        }
-    except Exception as e:
-        logger.warning("Could not connect to MikroTik at %s:%s — %s", host, port, e)
-        return {"status": "offline", "cpuLoad": 0, "memoryUsage": 0, "uptime": "0d 0h 0m", "activeUsers": 0, "error": str(e)}
+            return {
+                "status": "online",
+                "cpuLoad": int(info.get('cpu-load', 0) or 0),
+                "memoryUsage": memory_usage,
+                "uptime": format_uptime(info.get('uptime', '')),
+                "activeUsers": len(active),
+                "error": None,
+            }
+        except Exception as e:
+            logger.warning("Could not connect to MikroTik at %s:%s — %s", host, port, e)
+            return {"status": "offline", "cpuLoad": 0, "memoryUsage": 0, "uptime": "0d 0h 0m", "activeUsers": 0, "error": str(e)}
+        
+
+    def get_profile_by_name(self):
+        profiles = self.get_available_user_profiles()
+        return next((p for p in profiles if p.get('name') == self.profile_name), None)
+
+    def match_product_to_profile(self):
+        return self.get_profile_by_name()
+
+
 
 
 def render_captive_portal_html(hotspot_name, router_id, till_number, api_base_url=API_BASE_URL):
@@ -397,15 +458,6 @@ def get_router_connection(ROUTER_IP,ROUTER_USERNAME,ROUTER_PASSWORD):
     )
     return connection.get_api()
 
-def _parse_speed_mbps(speed_limit: str) -> str | None:
-    import re
-    if not speed_limit or speed_limit.lower() == 'unlimited':
-        return None
-    m = re.search(r'(\d+(?:\.\d+)?)', speed_limit)
-    if not m:
-        return None
-    num = m.group(1).rstrip('.')
-    return f"{num}M/{num}M"
 
 
 def create_hotspot_user(router, phone, duration_minutes, profile_name, password):
@@ -424,8 +476,14 @@ def create_hotspot_user(router, phone, duration_minutes, profile_name, password)
         existing = next((u for u in all_users if u.get('name') == phone), None)
         if not existing:
             raise RuntimeError(f"User '{phone}' not found for update on {host}")
-        dot_id = existing.get('.id')
-        logger.debug("Updating user %s .id=%s keys=%s", phone, dot_id, list(existing.keys()))
+        # Log the full dict so we can see the actual key name for the ID field
+        logger.info("Existing user dict for %s: %s", phone, existing)
+        dot_id = existing.get('.id') or existing.get('id')
+        if dot_id is None:
+            # Fallback: search for any key that looks like an ID
+            dot_id = next((v for k, v in existing.items() if 'id' in k.lower()), None)
+        if dot_id is None:
+            raise RuntimeError(f"Cannot find .id for user '{phone}' — dict: {existing}")
         users.set(**{'.id': dot_id, 'password': password,
                      'limit-uptime': limit_uptime, 'profile': profile_name})
         logger.info("Hotspot user updated: %s on %s", phone, host)
@@ -449,7 +507,6 @@ def create_hotspot_user(router, phone, duration_minutes, profile_name, password)
                     raise RuntimeError(f"Cannot create hotspot user '{phone}': {fallback_err}")
         else:
             raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
-
     return phone, password
 
 def add_user_to_router(username, password, rate_limit):
@@ -555,43 +612,32 @@ def get_available_user_profiles(router):
         return []
 
 
-def get_profile_by_name(router, profile_name: str):
-    profiles = get_available_user_profiles(router)
-    return next((p for p in profiles if p.get('name') == profile_name), None)
-
-
-def match_product_to_profile(router, product):
-    """
-    Ensure a hotspot user profile exists on the router for this product.
-    Creates it if missing. Called as a background task after product creation.
-    """
-    profile_name = product.name
-    speed = _parse_speed_mbps(product.speed_limit) or "2M/2M"
-    host = router.tunnel_ip or router.ip_address
-    try:
-        connection = RouterOsApiPool(
-            host=host,
-            username=router.user_name,
-            password=router.password,
-            plaintext_login=True,
-        )
-        connection.set_timeout(5)
-        api = connection.get_api()
-        # Skip .get() check — it causes !empty / cancel issues with routeros_api.
-        # Just try to add; catch the "already exists" error gracefully.
-        api.get_resource('/ip/hotspot/user/profile').add(**{
-            'name': profile_name,
-            'rate-limit': speed,
-            'shared-users': '1',
-        })
-        logger.info("Created hotspot profile '%s' (%s) on %s", profile_name, speed, host)
-        connection.disconnect()
-    except Exception as e:
-        err = str(e).lower()
-        if 'already have' in err or 'already exists' in err or 'failure' in err:
-            logger.info("Profile '%s' already exists on %s", profile_name, host)
-        else:
-            logger.warning("Failed to create profile '%s' on %s: %s", profile_name, host, e)
+   
+   
+        # connection = RouterOsApiPool(
+        #     host=host,
+        #     username=router.user_name,
+        #     password=router.password,
+        #     plaintext_login=True,
+        # )
+        # connection.set_timeout(3)
+        # api = connection.get_api()
+        #
+        # # Skip .get() check — it causes !empty / cancel issues with routeros_api.
+        # # Just try to add; catch the "already exists" error gracefully.
+        # api.get_resource('/ip/hotspot/user/profile').add(**{
+        #     'name': profile_name,
+        #     'rate-limit': speed,
+        #     'shared-users': '1',
+        # })
+        # logger.info("Created hotspot profile '%s' (%s) on %s", profile_name, speed, host)
+        # connection.disconnect()
+    # except Exception as e:
+    #     err = str(e).lower()
+    #     if 'already have' in err or 'already exists' in err or 'failure' in err:
+    #         logger.info("Profile '%s' already exists on %s", profile_name, host)
+    #     else:
+    #         logger.warning("Failed to create profile '%s' on %s: %s", profile_name, host, e)
 
 
 def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
