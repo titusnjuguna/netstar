@@ -424,8 +424,18 @@ def create_hotspot_user(router, phone, duration_minutes, profile_name, password)
         logger.info("Hotspot user created: %s on %s", phone, host)
     except Exception as add_err:
         if 'already have user' in str(add_err).lower():
-            # User exists from a previous poll — password is deterministic from receipt so it's already correct
-            logger.info("Hotspot user already exists: %s on %s", phone, host)
+            # Returning customer — remove old entry and re-add with fresh session and new password
+            try:
+                users.remove(**{'name': phone})
+            except Exception:
+                pass
+            users.add(**{
+                'name': phone,
+                'password': password,
+                'limit-uptime': limit_uptime,
+                'profile': profile_name,
+            })
+            logger.info("Hotspot user renewed: %s on %s", phone, host)
         else:
             raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
 
