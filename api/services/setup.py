@@ -67,6 +67,7 @@ class MikrotikOperation:
                 port=self.port,
                 plaintext_login=True
             )
+            self.connection.set_timeout(5)
             self.api = self.connection.get_api()
         except exceptions.RouterOsApiConnectionError:
             raise HTTPException(status_code=503, detail="Router is offline or inaccessible.")
@@ -107,8 +108,8 @@ class MikrotikOperation:
 
     def check_mikrotik_status(self):
         try:
-            api = self.__initiate_connection().get_api()
-            response = api.get_resource('/system/resource').get()
+            self.__initiate_connection()
+            response = self.api.get_resource('/system/resource').get()
             if response:
                 print("Router is online!")
                 for data in response:
@@ -116,7 +117,7 @@ class MikrotikOperation:
                     print(f"CPU Load: {data.get('cpu-load')}%")
             else:
                 print("Router is unreachable or returned no data.")
-            self.connection.disconnect()
+            self.api.disconnect()
         except exceptions.RouterOsApiConnectionError:
             print("Failed to connect. Router is offline or inaccessible.")
         except exceptions.RouterOsApiCommunicationError as e:
@@ -150,12 +151,10 @@ class MikrotikOperation:
     def get_router_live_stats(self):
         try:
             self.__initiate_connection()
-            self.api.set_timeout(5)
-            api = self.api.get_api()
+            api = self.api
             resource = list(api.get_resource('/system/resource').get())
             active = list(api.get_resource('/ip/hotspot/active').get())
             self.api.disconnect()
-
             info = resource[0] if resource else {}
             total_memory = int(info.get('total-memory', 0) or 0)
             free_memory = int(info.get('free-memory', 0) or 0)
@@ -172,8 +171,17 @@ class MikrotikOperation:
         except Exception as e:
             logger.warning("Could not connect to MikroTik at %s:%s — %s", self.host, self.port, e)
             return {"status": "offline", "cpuLoad": 0, "memoryUsage": 0, "uptime": "0d 0h 0m", "activeUsers": 0, "error": str(e)}
-        
-
+    
+    def get_available_user_profiles(self):
+        self.__initiate_connection()
+        profiles = list(self.api.get_resource('/ip/hotspot/user/profile').get())
+        self.api.disconnect()
+        if not profiles:
+            logger.warning(f"Could not fetch profiles from %s: %s",self.host, "No profiles found")
+            return []
+        return profiles
+       
+    
     def get_profile_by_name(self):
         profiles = self.get_available_user_profiles()
         return next((p for p in profiles if p.get('name') == self.profile_name), None)
@@ -592,24 +600,7 @@ def generate_ros_script(reg_token: str, server_url: str) -> str:
 /tool fetch url=$serverUrl http-method=post http-data=$data output=none"""
 
 
-def get_available_user_profiles(router):
-    try:
-        connection = RouterOsApiPool(
-            host=router.ip_address,
-            username=router.user_name,
-            password=router.password,
-            plaintext_login=True,
-        )
-        connection.set_timeout(5)
-        api = connection.get_api()
-        profiles = list(api.get_resource('/ip/hotspot/user/profile').get())
-        connection.disconnect()
-        return profiles
-    except exceptions.RouterOsApiConnectionError:
-        return []
-    except Exception as e:
-        logger.warning("Could not fetch profiles from %s: %s", router.ip_address, e)
-        return []
+
 
 
    
