@@ -598,45 +598,62 @@ def generate_ros_script(reg_token: str, server_url: str) -> str:
 
 
 def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
-    """
-    Adds the peer to the live kernel interface, then persists it to
-    wg0.conf via syncconf so it survives a reboot. Requires the API
-    process to have permission to run `wg`/`wg-quick` (root, or a
-    sudo rule scoped to exactly these two commands).
-    """
     bare_ip = tunnel_ip.split("/")[0]
+    conf_path = f"/etc/wireguard/{settings.WG_INTERFACE}.conf"
+
     try:
+        # 1. Add peer to live kernel interface immediately
         subprocess.run(
             [
                 "wg", "set", settings.WG_INTERFACE,
                 "peer", public_key,
                 "allowed-ips", f"{bare_ip}/32",
             ],
-            check=True,
-            capture_output=True,
-            text=True,
+            check=True, capture_output=True, text=True,
         )
- 
-        # Persist: regenerate config from live state, then sync (no tunnel drop)
-        strip = subprocess.run(
-            ["wg-quick", "strip", settings.WG_INTERFACE],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        tmp_path = f"/tmp/{settings.WG_INTERFACE}-generated.conf"
-        with open(tmp_path, "w") as f:
-            f.write(strip.stdout)
-        subprocess.run(
-            ["wg", "syncconf", settings.WG_INTERFACE, tmp_path],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+
+        # 2. Persist to wg0.conf so it survives reboots
+        try:
+            with open(conf_path, "r") as f:
+                conf = f.read()
+        except FileNotFoundError:
+            conf = ""
+
+        # Remove any existing block for this public key to avoid duplicates
+        lines = conf.splitlines()
+        filtered = []
+        skip = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped == "[Peer]":
+                skip = False
+                # Peek ahead: if next non-empty line contains this public key, skip the block
+                lookahead = "\n".join(lines[lines.index(line):])
+                if f"PublicKey = {public_key}" in lookahead.split("[Peer]")[1].split("[")[0]:
+                    skip = True
+                    continue
+            if skip and (stripped.startswith("[") and stripped != "[Peer]"):
+                skip = False
+            if not skip:
+                filtered.append(line)
+
+        new_block = f"\n[Peer]\nPublicKey = {public_key}\nAllowedIPs = {bare_ip}/32\n"
+        updated = "\n".join(filtered).rstrip() + new_block
+
+        with open(conf_path, "w") as f:
+            f.write(updated)
+
+        logger.info("Persisted peer %s (%s/32) to %s", public_key[:10], bare_ip, conf_path)
+
     except subprocess.CalledProcessError as exc:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to apply WireGuard peer: {exc.stderr or exc}",
+        )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to write {conf_path}: {exc}",
         )
  
 
