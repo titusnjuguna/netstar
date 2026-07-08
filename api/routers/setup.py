@@ -216,6 +216,7 @@ def create_products(product: ProductCreate, background_tasks: BackgroundTasks, d
     db.refresh(new_product)
     mikrotik_op = MikrotikOperation(router=router,product=new_product)
     background_tasks.add_task(mikrotik_op.match_product_to_profile)
+    background_tasks.add_task(mikrotik_op.refresh_router_products)
     return ProductDetailResponse(
         message="Product created successfully",
         name = new_product.router.hotspot_name if new_product.router else "Unknown",
@@ -274,7 +275,7 @@ def delete_product(id: int, db: Session = Depends(get_db), _: dict = Depends(ver
     return MessageResponse(message="Product deleted successfully")
 
 @router.get("/v1/get/products", response_model=ProductsListResponse)
-def get_all_products(
+def get_all_products(background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     host: str = Query(None, description="Filter products by router IP address"),
 ):
@@ -285,6 +286,8 @@ def get_all_products(
             return ProductsListResponse(message=f"No router found with hostname {host}", products=[])
         query = query.filter(Products.router_id == router.id)
     products = query.all()
+    mikrotik_op = MikrotikOperation(router=router)
+    background_tasks.add_task(mikrotik_op.fetch_hotspot_details)
     product_responses = [
         ProductOut(
             id=str(p.id),

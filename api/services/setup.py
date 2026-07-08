@@ -57,6 +57,7 @@ class MikrotikOperation:
         self.connection = None
         self.api = None
         self.product = kwargs.get("product")
+        self.host_name = router.hostname
 
     def __initiate_connection(self):
         try:
@@ -188,6 +189,26 @@ class MikrotikOperation:
 
     def match_product_to_profile(self):
         return self.get_profile_by_name()
+
+    def refresh_router_products(self):
+        self.__initiate_connection()
+        self.api.get_resource('/tool/fetch').call(
+            url=f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
+            output="file",
+            dst_path="hotspot/products.json"
+        )
+        self.connection.disconnect()
+        return True
+
+    def fetch_hotspot_details(self):
+        self.__initiate_connection()
+        self.api.get_resource('/tool/fetch').call(
+            url=f"http://167.86.76.158:8070/api/v1/get/hotspot-details?host={self.host_name}",
+            output="file",
+            dst_path="hotspot/more.json"
+        )
+        self.connection.disconnect()
+        return True
 
 def render_captive_portal_html(hotspot_name, router_id, till_number, api_base_url=API_BASE_URL):
     template = _template_env.get_template("hotspot_login.html")
