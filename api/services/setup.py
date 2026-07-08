@@ -189,9 +189,6 @@ class MikrotikOperation:
     def match_product_to_profile(self):
         return self.get_profile_by_name()
 
-
-
-
 def render_captive_portal_html(hotspot_name, router_id, till_number, api_base_url=API_BASE_URL):
     template = _template_env.get_template("hotspot_login.html")
     return template.render(
@@ -600,37 +597,6 @@ def generate_ros_script(reg_token: str, server_url: str) -> str:
 /tool fetch url=$serverUrl http-method=post http-data=$data output=none"""
 
 
-
-
-
-   
-   
-        # connection = RouterOsApiPool(
-        #     host=host,
-        #     username=router.user_name,
-        #     password=router.password,
-        #     plaintext_login=True,
-        # )
-        # connection.set_timeout(3)
-        # api = connection.get_api()
-        #
-        # # Skip .get() check — it causes !empty / cancel issues with routeros_api.
-        # # Just try to add; catch the "already exists" error gracefully.
-        # api.get_resource('/ip/hotspot/user/profile').add(**{
-        #     'name': profile_name,
-        #     'rate-limit': speed,
-        #     'shared-users': '1',
-        # })
-        # logger.info("Created hotspot profile '%s' (%s) on %s", profile_name, speed, host)
-        # connection.disconnect()
-    # except Exception as e:
-    #     err = str(e).lower()
-    #     if 'already have' in err or 'already exists' in err or 'failure' in err:
-    #         logger.info("Profile '%s' already exists on %s", profile_name, host)
-    #     else:
-    #         logger.warning("Failed to create profile '%s' on %s: %s", profile_name, host, e)
-
-
 def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
     """
     Adds the peer to the live kernel interface, then persists it to
@@ -707,12 +673,11 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :local hubPort        @@HUB_PORT@@
 :local registerUrl    "@@CALLBACK_URL@@"
 :local regToken       "@@REGISTRATION_TOKEN@@"
-:local backendUrl     "@@BACKEND_URL@@"
  
 # ---- 1. Scoped API user for backend automation (not 'admin') ----
 :put "Step 1: Creating scoped API user..."
 :if ([:len [/user group find name=api-only]] = 0) do={
-  /user group add name=api-only policy=api,rest-api,read,write
+  /user group add name=api-only policy=api,rest-api,read,write,ssh,ftp
 }
 :if ([:len [/user find name=$apiUser]] = 0) do={
   /user add name=$apiUser password=$apiPassword group=api-only
@@ -766,6 +731,9 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :if ([:len [/ip hotspot profile find name=hotspot-profile]] = 0) do={
   /ip hotspot profile add name=hotspot-profile hotspot-address=10.10.10.1 dns-name=$hotspotDnsName
 }
+# Accept plaintext (PAP) logins so a custom login.html can submit the
+# password directly, plus cookie so returning devices stay logged in.
+/ip hotspot profile set [find name=hotspot-profile] login-by=http-pap,cookie
 :if ([:len [/ip hotspot find name=$hotspotName]] = 0) do={
   /ip hotspot add name=$hotspotName interface=bridge-hotspot address-pool=hotspot-pool profile=hotspot-profile disabled=no
 }
@@ -773,16 +741,16 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 # ---- 5b. Walled garden — allow payment API access before authentication ----
 :put "Step 5b: Setting up walled garden for payment..."
 :if ([:len [/ip hotspot walled-garden ip find dst-address=$hubHost]] = 0) do={
-  /ip hotspot walled-garden ip add dst-address=$hubHost action=accept comment="platform payment API"
+  /ip hotspot walled-garden ip add dst-address=$hubHost protocol=tcp action=accept comment="platform payment API"
 }
  
 # ---- 5c. Cache product list from platform (host passed as query param) ----
 :put "Step 5c: Caching product list..."
-/tool fetch url=($backendUrl . "get/products?host=" . $hotspotDnsName) \\
+/tool fetch url=("http://" . $hubHost . ":8070/v1/products?host=" . $hotspotName) \\
   output=file dst-path="hotspot/products.json"
 :if ([:len [/system scheduler find name=refresh-products]] = 0) do={
   /system scheduler add name=refresh-products interval=1h \\
-    on-event="/tool fetch url=\\"@@BACKEND_URL@@get/products?host=@@HOTSPOT_DNS_NAME@@\\" output=file dst-path=\\"hotspot/products.json\\""
+    on-event=(":local h \\"" . $hubHost . "\\"\\r\\n:local n \\"" . $hotspotName . "\\"\\r\\n/tool fetch url=(\\"http://\\" . \\$h . \\":8070/v1/products?host=\\" . \\$n) output=file dst-path=\\"hotspot/products.json\\"")
 }
  
 # ---- 6. Voucher duration profiles ----
@@ -837,8 +805,20 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
   /certificate sign api-cert ca=local-ca name=api-cert
 }
 /ip service set www-ssl certificate=api-cert disabled=no
-/ip service enable api
-/ip service set api allowed-address=$hubTunnelIp
+ 
+# Enable the plaintext binary API (port 8728) for backend automation.
+# This is safe here because it is scoped to ONLY be reachable from the
+# hub's tunnel address — never exposed to the LAN or open internet.
+:if ([:len [/ip service find name=api]] > 0) do={
+  /ip service set api disabled=no address=($hubTunnelIp . "/32")
+}
+# Also scope the encrypted API (8729) to the tunnel only, for defence in depth.
+:if ([:len [/ip service find name=api-ssl]] > 0) do={
+  /ip service set api-ssl disabled=no address=($hubTunnelIp . "/32")
+}
+# Allow SSH from the hub tunnel (for remote fleet management) AND the local
+# hotspot LAN (so on-site setup isn't locked out) — but NOT the open WAN.
+/ip service set ssh disabled=no address=($hubTunnelIp . "/32,10.10.10.0/24,192.168.88.0/24")
  
 # ---- 10. Firewall: allow tunnel traffic BEFORE the default WAN drop rule ----
 :put "Step 10: Fixing firewall rule order..."
@@ -870,7 +850,11 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :put "  Waiting for WireGuard tunnel to establish..."
 :delay 5
 :local myPublicKey [/interface wireguard get [find name=wg-hub] public-key]
-
+:local myTunnelIp [/ip address get [find interface=wg-hub] address]
+:local payload ("{\\"token\\":\\"" . $regToken . "\\",\\"public_key\\":\\"" . $myPublicKey . "\\"}")
+:local result [/tool fetch url=$registerUrl http-method=post \\
+  http-header-field="Content-Type: application/json" \\
+  http-data=$payload output=user as-value]
  
 :put ""
 :put "============================================================"
@@ -878,12 +862,18 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :put "============================================================"
 :put ($result->"data")
 :put ""
-:put "------------------------------------------------------------"
-:put "If the above shows an error, this router's public key is below"
-:put "(copy the line exactly, nothing else) - contact support to add"
-:put "it manually:"
+:put "Hotspot gateway IP (clients connect here):"
+:put [/ip address get [find interface=bridge-hotspot] address]
 :put ""
+:put "------------------------------------------------------------"
+:put "If the above shows an error, add this peer to the hub manually"
+:put "using the two values below (copy each line exactly):"
+:put ""
+:put "Public key:"
 :put $myPublicKey
+:put ""
+:put "Tunnel IP:"
+:put $myTunnelIp
 :put ""
 :put "------------------------------------------------------------"
 """
