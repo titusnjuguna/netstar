@@ -145,3 +145,4 @@ class RegisterCallbackResponse(BaseModel):
 class WireGuardSet(BaseModel):
     public_key:str
     ip_address:str
+    public_ip: Optional[str] = None
