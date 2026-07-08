@@ -471,8 +471,9 @@ def get_wireguard_backend_to_router(_: dict = Depends(verify_token)):
         "hub_public_key": settings.HUB_PUBLIC_KEY,
         "hub_endpoint_host": settings.HUB_ENDPOINT_HOST,
         "hub_endpoint_port": settings.HUB_ENDPOINT_PORT,
+        "hub_interface": settings.HUB_INTERFACE,
         "script": (
-            f"/interface wireguard peers add interface=wg-backend "
+            f"/interface wireguard peers add interface={settings.HUB_INTERFACE} "
             f"public-key={settings.HUB_PUBLIC_KEY} "
             f"endpoint-address={settings.HUB_ENDPOINT_HOST} "
             f"endpoint-port={settings.HUB_ENDPOINT_PORT} "
