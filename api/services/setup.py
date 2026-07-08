@@ -192,7 +192,7 @@ class MikrotikOperation:
 
     def refresh_router_products(self):
         self.__initiate_connection()
-        self.api.get_resource('/tool').call('fetch', extra_arguments={
+        self.api.get_resource('/tool').call('fetch', arguments={
             'url': f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
             'output': 'file',
             'dst-path': 'hotspot/products.json',
@@ -202,7 +202,7 @@ class MikrotikOperation:
 
     def fetch_hotspot_details(self):
         self.__initiate_connection()
-        self.api.get_resource('/tool').call('fetch', extra_arguments={
+        self.api.get_resource('/tool').call('fetch', arguments={
             'url': f"http://167.86.76.158:8070/api/v1/get/hotspot-details?host={self.host_name}",
             'output': 'file',
             'dst-path': 'hotspot/more.json',
