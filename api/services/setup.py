@@ -851,10 +851,7 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :delay 5
 :local myPublicKey [/interface wireguard get [find name=wg-hub] public-key]
 :local myTunnelIp [/ip address get [find interface=wg-hub] address]
-:local payload ("{\\"token\\":\\"" . $regToken . "\\",\\"public_key\\":\\"" . $myPublicKey . "\\"}")
-:local result [/tool fetch url=$registerUrl http-method=post \\
-  http-header-field="Content-Type: application/json" \\
-  http-data=$payload output=user as-value]
+
  
 :put ""
 :put "============================================================"
