@@ -1,5 +1,7 @@
 import json
 from datetime import datetime,timezone
+from api import db
+from api.db import db
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from api.services.setup import * 
@@ -456,6 +458,11 @@ def get_router_ip_address(db: Session = Depends(get_db)):
 @router.post("/v1/set/wireguard")
 def set_up_wireguard_router_to_backend(req: WireGuardSet, _: dict = Depends(verify_token)):
     apply_wireguard_peer(public_key=req.public_key, tunnel_ip=req.ip_address)
+    #set public facing ip address
+    db_router = db.query(RouterInfo).filter(RouterInfo.tunnel_ip == req.ip_address).first()
+    if db_router:
+        db_router.public_ip = req.public_ip
+        db.commit()
     return {"message": f"WireGuard peer {req.public_key} added with IP {req.ip_address}/32"}
 
 @router.get("/v1/get/wireguard")

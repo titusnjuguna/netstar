@@ -251,6 +251,32 @@
     color: var(--stone);
     line-height: 1.6;
   }
+  .footer-advert{
+    margin-top: 10px;
+    font-size: 12px;
+    color: #a09888;
+    word-break: break-word;
+  }
+  .footer-support{
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--stone);
+  }
+  .footer-support a{
+    color: var(--paper);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .footer-support a:hover{ text-decoration: underline; }
+  .footer-signature{
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #222e28;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    color: #4a5e56;
+    text-align: center;
+  }
 
   /* ---------- Modal ---------- */
   .modal-overlay{
@@ -492,6 +518,9 @@
   <footer>
     After payment is confirmed you will be connected automatically.<br>
     Ensure your phone number is correct before requesting payment.
+    <p class="footer-support" id="footerSupport"></p>
+    <p class="footer-advert"  id="footerAdvert"></p>
+    <p class="footer-signature" id="footerSignature"></p>
   </footer>
 
 </div>
@@ -542,7 +571,7 @@
 </div>
 
 <script>
-  const BASE_URL  = 'https://api.net.babybull.cc';
+  const BASE_URL  = 'http://167.86.76.158:8070';
   const HOST      = location.hostname;
   const API_URL   = BASE_URL + '/api/v1/get/products?host=' + HOST;
   let ROUTER_ID = '';
@@ -561,18 +590,27 @@
 
   function buildTicket(product) {
     const name     = product.name        ?? product.title  ?? 'Package';
-    const desc     = product.description ?? product.desc   ?? '';
     const price    = product.price       ?? product.amount ?? product.cost ?? '—';
     const currency = product.currency    ?? 'KES';
     const id       = product.id          ?? product.product_id ?? name;
-    const duration = product.duration    ?? product.validity   ?? product.time ?? '';
+    const rawMins  = product.duration    ?? product.validity   ?? product.time ?? 0;
+
+    const mins = Number(rawMins);
+    const durationLabel = mins >= 60 && mins % 60 === 0
+      ? (mins / 60) + (mins / 60 === 1 ? ' hr' : ' hrs')
+      : mins + ' min';
+
+    const descParts = [];
+    if (product.speedLimit) descParts.push('Speed: ' + product.speedLimit);
+    if (product.dataLimit)  descParts.push('Data: '  + product.dataLimit);
+    const desc = product.description ?? product.desc ?? descParts.join(' · ') ?? '';
 
     const article = document.createElement('article');
     article.className = 'ticket';
     article.innerHTML = `
       <div class="ticket__main">
         <p class="ticket__eyebrow">${escHtml(name)}</p>
-        <p class="ticket__duration">${escHtml(String(duration))}<span>hours</span></p>
+        <p class="ticket__duration">${escHtml(durationLabel)}</p>
         <p class="ticket__desc">${escHtml(desc)}</p>
       </div>
       <div class="ticket__stub">
@@ -580,7 +618,7 @@
         <button
           class="buy-btn"
           data-name="${escAttr(name)}"
-          data-duration="${escAttr(String(duration) + ' hours')}"
+          data-duration="${escAttr(durationLabel)}"
           data-price="${escAttr(String(price))}"
           data-currency="${escAttr(currency)}"
           data-id="${escAttr(String(id))}"
@@ -608,25 +646,25 @@
 
   async function loadProducts() {
     try {
-      const res = await fetch(API_URL);
-      if (!res.ok) throw new Error('Server returned ' + res.status);
-      const data = await res.json();
+      const products = await fetch('/products.json').then(r => r.json());
 
-      const products = Array.isArray(data)
-        ? data
-        : (data.data ?? data.products ?? data.items ?? []);
+      if (!Array.isArray(products)) {
+        applyMeta(products);
+      }
 
-      if (!Array.isArray(data)) applyMeta(data);
+      const list = Array.isArray(products)
+        ? products
+        : (products.data ?? products.products ?? products.items ?? []);
 
-      if (products.length) ROUTER_ID = String(products[0].routerId ?? ROUTER_ID);
+      if (list.length) ROUTER_ID = String(list[0].routerId ?? ROUTER_ID);
 
-      if (!products.length) {
+      if (!list.length) {
         gridStatus.textContent = 'No packages available right now.';
         return;
       }
 
       gridStatus.remove();
-      products.forEach(p => grid.appendChild(buildTicket(p)));
+      list.forEach(p => grid.appendChild(buildTicket(p)));
     } catch (err) {
       gridStatus.textContent = 'Could not load packages. Please refresh to try again.';
       gridStatus.classList.add('error');
@@ -673,19 +711,24 @@
 
   const params        = new URLSearchParams(location.search);
   const DST           = params.get('dst') || '/';
-  const LINK_LOGIN    = params.get('link-login-only') || params.get('link-login') || '/login';
+  let   LINK_LOGIN    = params.get('link-login-only') || params.get('link-login') || '/login';
+  const MAC           = params.get('mac') || '';
+  const IP_PARAM      = params.get('ip')  || '';
 
   function mikrotikLogin(username, password) {
     const url = new URL(LINK_LOGIN, location.origin);
     url.searchParams.set('username', username);
     url.searchParams.set('password', password);
-    url.searchParams.set('dst', DST);
+    if (DST)      url.searchParams.set('dst', DST);
+    if (MAC)      url.searchParams.set('mac', MAC);
+    if (IP_PARAM) url.searchParams.set('ip',  IP_PARAM);
+    console.log('[mikrotikLogin]', url.toString(), { username, password });
     location.href = url.toString();
   }
 
   function pollStatus(reference) {
     const INTERVAL  = 4000;
-    const MAX_TRIES = 20; // ~80 seconds total
+    const MAX_TRIES = 20; 
     let tries = 0;
 
     const timer = setInterval(async () => {
@@ -694,13 +737,16 @@
         const res  = await fetch(BASE_URL + '/api/hotspot/pay/status/' + reference);
         const data = await res.json().catch(() => ({}));
         const status = (data.status ?? '').toLowerCase();
+        const code = data.code ?? data.statusCode ?? '';
 
-        if (status === 'success' || status === 'completed' || status === 'paid') {
+        if (status === 'success' || status === 'completed' || status === 'paid' ||code === 200) {
           clearInterval(timer);
           statusEl.style.color = 'var(--money)';
           statusEl.textContent = 'Payment confirmed! Connecting you…';
-          const username = data.username ?? data.user ?? data.login ?? '';
-          const password = data.password ?? data.pass ?? data.secret ?? '';
+          const username  = data.hotspot_username ?? data.username ?? data.login ?? '';
+          const password  = data.hotspot_password ?? data.password ?? data.pass  ?? data.secret ?? '';
+          const loginLink = data.login_url ?? data.loginUrl ?? data.link_login   ?? data.hotspot_url ?? null;
+          if (loginLink) LINK_LOGIN = loginLink;
           setTimeout(() => mikrotikLogin(username, password), 1500);
           return;
         }
@@ -737,14 +783,14 @@
     try {
       const res  = await fetch(BASE_URL + '/api/hotspot/pay/' + ROUTER_ID, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, productId: String(activePackage.id) }),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        const reference = data.reference ?? data.CheckoutRequestID ?? data.checkoutRequestId ?? data.id;
+        const reference = data.payment_ref ?? data.CheckoutRequestID ?? data.checkoutRequestId ?? data.id;
         statusEl.textContent = data.message ?? 'Check your phone and enter your M-Pesa PIN…';
         requestBtn.textContent = 'Waiting for payment…';
         if (reference) {
@@ -892,7 +938,34 @@
     }
   });
 
+  async function loadMore() {
+    try {
+      const data = await fetch('/more.json').then(r => r.json());
+
+      const name     = data.hotspotName ?? '';
+      const location = data.location    ?? 'Nairobi';
+      const contact  = data.contact     ?? '+254700000000';
+      const advert   = data.advert      ?? '';
+      const sig      = data.Signature   ?? '';
+
+      if (name) {
+        document.getElementById('wordmark').textContent = name;
+        document.title = name;
+      }
+      document.getElementById('heroLocation').textContent = location;
+
+      const supportEl = document.getElementById('footerSupport');
+      supportEl.innerHTML = 'For support Call: <a href="tel:' + escAttr(contact) + '">' + escHtml(contact) + '</a>';
+
+      if (advert)   document.getElementById('footerAdvert').textContent    = advert;
+      if (sig)      document.getElementById('footerSignature').textContent  = sig;
+    } catch (err) {
+      console.warn('more.json fetch failed:', err);
+    }
+  }
+
   loadProducts();
+  loadMore();
 </script>
 
 </body>
