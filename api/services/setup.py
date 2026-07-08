@@ -601,55 +601,47 @@ def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
     bare_ip = tunnel_ip.split("/")[0]
     conf_path = f"/etc/wireguard/{settings.WG_INTERFACE}.conf"
 
+    # 1. Add peer to the live kernel interface immediately
     try:
-        # 1. Add peer to live kernel interface immediately
         subprocess.run(
-            [
-                "wg", "set", settings.WG_INTERFACE,
-                "peer", public_key,
-                "allowed-ips", f"{bare_ip}/32",
-            ],
+            ["wg", "set", settings.WG_INTERFACE,
+             "peer", public_key,
+             "allowed-ips", f"{bare_ip}/32"],
             check=True, capture_output=True, text=True,
         )
+    except subprocess.CalledProcessError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to apply WireGuard peer: {exc.stderr or exc}",
+        )
 
-        # 2. Persist to wg0.conf so it survives reboots
+    # 2. Persist to wg0.conf so the peer survives a reboot
+    try:
         try:
             with open(conf_path, "r") as f:
                 conf = f.read()
         except FileNotFoundError:
             conf = ""
 
-        # Remove any existing block for this public key to avoid duplicates
-        lines = conf.splitlines()
-        filtered = []
-        skip = False
-        for line in lines:
-            stripped = line.strip()
-            if stripped == "[Peer]":
-                skip = False
-                # Peek ahead: if next non-empty line contains this public key, skip the block
-                lookahead = "\n".join(lines[lines.index(line):])
-                if f"PublicKey = {public_key}" in lookahead.split("[Peer]")[1].split("[")[0]:
-                    skip = True
-                    continue
-            if skip and (stripped.startswith("[") and stripped != "[Peer]"):
-                skip = False
-            if not skip:
-                filtered.append(line)
+        # Split on [Peer] boundaries — first part is the [Interface] section
+        parts = conf.split("\n[Peer]")
+        interface_section = parts[0]
 
-        new_block = f"\n[Peer]\nPublicKey = {public_key}\nAllowedIPs = {bare_ip}/32\n"
-        updated = "\n".join(filtered).rstrip() + new_block
+        # Drop any existing block for this public key (re-registration / IP change)
+        other_peers = [p for p in parts[1:] if f"PublicKey = {public_key}" not in p]
+
+        new_peer = f"\n[Peer]\nPublicKey = {public_key}\nAllowedIPs = {bare_ip}/32"
+
+        updated = interface_section.rstrip()
+        for peer in other_peers:
+            updated += "\n[Peer]" + peer
+        updated += new_peer + "\n"
 
         with open(conf_path, "w") as f:
             f.write(updated)
 
         logger.info("Persisted peer %s (%s/32) to %s", public_key[:10], bare_ip, conf_path)
 
-    except subprocess.CalledProcessError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to apply WireGuard peer: {exc.stderr or exc}",
-        )
     except OSError as exc:
         raise HTTPException(
             status_code=500,
@@ -924,42 +916,6 @@ def render_setup_script(
         script = script.replace(token, value)
     return script
  
-def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
-    bare_ip = tunnel_ip.split("/")[0]
-    try:
-        subprocess.run(
-            [
-                "wg", "set", settings.WG_INTERFACE,
-                "peer", public_key,
-                "allowed-ips", f"{bare_ip}/32",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
- 
-        strip = subprocess.run(
-            ["wg-quick", "strip", settings.WG_INTERFACE],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        tmp_path = f"/tmp/{settings.WG_INTERFACE}-generated.conf"
-        with open(tmp_path, "w") as f:
-            f.write(strip.stdout)
-        subprocess.run(
-            ["wg", "syncconf", settings.WG_INTERFACE, tmp_path],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to apply WireGuard peer: {exc.stderr or exc}",
-        )
- 
-
 def allocate_tunnel_ip(db: Session) -> str:
     taken = {
         row.tunnel_ip
