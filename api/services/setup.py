@@ -92,7 +92,7 @@ class MikrotikOperation:
         if not self.api:
             self.__initiate_connection()
         profile_name = self.product.name
-        speed = self._parse_speed_mbps(self.product.speed_limit) or "2M/2M"
+        speed = self._parse_speed_mbps() or "2M/2M"
         try:
             self.api.get_resource('/ip/hotspot/user/profile').add(**{
                 'name': profile_name,
@@ -192,21 +192,21 @@ class MikrotikOperation:
 
     def refresh_router_products(self):
         self.__initiate_connection()
-        self.api.get_resource('/tool/fetch').call(
-            url=f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
-            output="file",
-            dst_path="hotspot/products.json"
-        )
+        self.api.get_resource('/tool').call('fetch', extra_arguments={
+            'url': f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
+            'output': 'file',
+            'dst-path': 'hotspot/products.json',
+        })
         self.connection.disconnect()
         return True
 
     def fetch_hotspot_details(self):
         self.__initiate_connection()
-        self.api.get_resource('/tool/fetch').call(
-            url=f"http://167.86.76.158:8070/api/v1/get/hotspot-details?host={self.host_name}",
-            output="file",
-            dst_path="hotspot/more.json"
-        )
+        self.api.get_resource('/tool').call('fetch', extra_arguments={
+            'url': f"http://167.86.76.158:8070/api/v1/get/hotspot-details?host={self.host_name}",
+            'output': 'file',
+            'dst-path': 'hotspot/more.json',
+        })
         self.connection.disconnect()
         return True
 
