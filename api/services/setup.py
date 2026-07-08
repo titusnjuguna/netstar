@@ -746,11 +746,11 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
  
 # ---- 5c. Cache product list from platform (host passed as query param) ----
 :put "Step 5c: Caching product list..."
-/tool fetch url=("http://" . $hubHost . ":8070/v1/products?host=" . $hotspotName) \\
+/tool fetch url=("http://" . $hubHost . ":8070/api/v1/get/products?host=" . $hotspotName) \\
   output=file dst-path="hotspot/products.json"
 :if ([:len [/system scheduler find name=refresh-products]] = 0) do={
   /system scheduler add name=refresh-products interval=1h \\
-    on-event=(":local h \\"" . $hubHost . "\\"\\r\\n:local n \\"" . $hotspotName . "\\"\\r\\n/tool fetch url=(\\"http://\\" . \\$h . \\":8070/v1/products?host=\\" . \\$n) output=file dst-path=\\"hotspot/products.json\\"")
+    on-event=(":local h \\"" . $hubHost . "\\"\\r\\n:local n \\"" . $hotspotName . "\\"\\r\\n/tool fetch url=(\\"http://\\" . \\$h . \\":8070/api/v1/get/products?host=\\" . \\$n) output=file dst-path=\\"hotspot/products.json\\"")
 }
  
 # ---- 6. Voucher duration profiles ----
