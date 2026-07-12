@@ -146,3 +146,16 @@ class WireGuardSet(BaseModel):
     public_key:str
     ip_address:str
     public_ip: Optional[str] = None
+
+
+
+class PaginationMeta(BaseModel):
+    total_items: int = Field(..., description="Total number of items in the database")
+    total_pages: int = Field(..., description="Total number of pages")
+    current_page: int = Field(..., description="Current page number")
+    page_size: int = Field(..., description="Number of items per page")
+
+class NewProductsListResponse(BaseModel):
+    message: str
+    products: List[ProductOut]
+    pagination: PaginationMeta 

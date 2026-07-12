@@ -1,6 +1,5 @@
 import json
 from datetime import datetime,timezone
-from api import db
 from api.db import db
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -8,14 +7,13 @@ from api.services.setup import *
 from api.services.payment import stk_push_request
 from api.schemas.setup import * 
 from api.schemas.payment import GeneralResponse
-from sqlalchemy.orm import Session
-from api.db.session import get_db, SessionLocal
-from api.models.setup import RouterInfo, Products
+from sqlalchemy.orm import Session,joinedload
+from api.db.session import get_db,SessionLocal
+from api.models.setup import RouterInfo,Products
 from api.services.auth import verify_token
 from sqlalchemy.sql import desc
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import Column, DateTime, Integer, String,select
-from sqlalchemy.orm import Session, declarative_base
+from sqlalchemy import Column, DateTime, Integer, String,select,desc
+import math
 
 router=APIRouter(prefix="/api",tags=["Router and Other Setup"])
 
@@ -90,7 +88,6 @@ def create_router(routerInfo: RouterCreate, _: dict = Depends(verify_token)):
             yield sse("complete", "done", "Router setup complete", routerId=router_id, routerStatus="online")
         finally:
             db.close()
-
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 #initiate stk push request
@@ -560,6 +557,47 @@ def get_products_by_router(host: str = Query(..., description="Router hostname t
             hostname = p.router.hostname if p.router else None )       for p in products
     ]
     return ProductsListResponse(message="Products fetched successfully", products=product_responses)
+
+@router.get("/v1/get/client/products", response_model= NewProductsListResponse)
+def get_products_with_routers(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1, description="Page number (starts at 1)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page (max 100)")):
+    total_items = db.query(Products).count()
+    total_pages = math.ceil(total_items / page_size) if total_items > 0 else 0
+    offset = (page - 1) * page_size
+    products = (
+        db.query(Products)
+        .options(joinedload(Products.router))
+        .order_by(desc(Products.id))
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    product_responses = [
+        ProductOut(
+            id=str(p.id),
+            name=p.name,
+            price=p.price,
+            duration=p.duration or 0,
+            speedLimit=p.speed_limit,
+            dataLimit=p.data_limit or "Unlimited",
+            createdAt=p.created_at,
+            routerId=str(p.router_id) if p.router_id else None,
+            hostname=p.router.hostname if p.router else None
+        )
+        for p in products
+    ]
+    return NewProductsListResponse(
+        message="Products fetched successfully",
+        products=product_responses,
+        pagination=PaginationMeta(
+            total_items=total_items,
+            total_pages=total_pages,
+            current_page=page,
+            page_size=page_size
+        )
+    )
 
 @router.delete("/v1/delete/router/{id}", response_model=MessageResponse)
 def delete_router(id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
