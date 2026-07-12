@@ -583,7 +583,7 @@ def get_products_with_routers(
             speedLimit=p.speed_limit,
             dataLimit=p.data_limit or "Unlimited",
             createdAt=p.created_at,
-            routerId=str(p.router_id) if p.router_id else None,
+            routerId=int(p.router_id) if p.router_id else None,
             hostname=p.router.hostname if p.router else None
         )
         for p in products
