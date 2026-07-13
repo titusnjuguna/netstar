@@ -41,7 +41,7 @@ class HotspotPayments(Base):
     product_id = Column(Integer, ForeignKey("products.id"))
     CheckoutRequestID = Column(String)
     has_been_transferred = Column(Boolean, default=False)
-    client_id = Column(Integer, ForeignKey("client.id"))
+    client_id = Column(Integer, ForeignKey("clients.id"))
     client = relationship("Clients",back_populates="hotspot_payments")
     products = relationship("Products",back_populates="hotspot_payments")
     created_at = Column(DateTime, default=datetime.utcnow)
