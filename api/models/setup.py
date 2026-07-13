@@ -37,4 +37,7 @@ class Products(Base):
     data_limit = Column(String, default="Unlimited")
     router_id = Column(Integer, ForeignKey('routers.id'))
     router = relationship("RouterInfo", backref="products")
+    subscription_id = Column(Integer,ForeignKey('subscriptions.id'),nullable=True)
+    subscriptions = relationship("Subscription",backref="products")
+
     created_at = Column(DateTime, default=datetime.utcnow)
