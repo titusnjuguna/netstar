@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 import requests
-from api.models.payment import HotspotPayments, PaymentConfig 
+from api.models.payment import HotspotPayments, PaymentConfig,PaymentDisbursement
 from api.models.settings import MpesaConfig
 from api.schemas.payment import PaymentConfigRequest, PaymentConfigResponse, PayRequest
 from sqlalchemy.orm import Session
@@ -83,3 +83,43 @@ def stk_push_request(amount,phone,till_number,product_id,db):
         return {"error": "Failed to initiate STK push request", "details": response.text, "status_code": response.status_code}
 
 # {"Success":"True","Code":200,"message":"Success","customer":"Tito","limit":"1000","balance":0,"access":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzM3MzYwMDgwLCJqdGkiOiJhNzQ5NTQ4MTU4Njg0N2VjYjE5ZmRlYzUzN2U5OWUzNyIsInVzZXJfaWQiOjF9.XsuRk7Vi17QZUpcxO4YPi_mifkywQ1-HZlHkUQgFDlE","refresh":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTczNzQzNTY4MCwianRpIjoiOWIyZGU3YmU5MDQ4NDJiOWE4ZWI3NzI4NTRjY2ZiMDMiLCJ1c2VyX2lkIjoxfQ.kuL_xQ0JYWi50b2UmKbLVPVJYb9VYNsDah07qa44nSs"}
+
+def send_payment_to_owner(router, amount, userID, phone, transaction_ref, db):
+    # Get the payment configuration for the router
+    payment_config = db.query(PaymentConfig).filter(PaymentConfig.router_id == router.id).first()
+    if not payment_config:
+        return {"error": "Payment configuration not found for the router."}
+
+    payload =    {
+    "OriginatorConversationID": "15c57ddfadd84cfdbcb910cb41beea5a",
+    "InitiatorName": payment_config.user,
+    "SecurityCredential": payment_config.password,
+    "CommandID": "Wifi Payment",
+    "Amount": float(amount) * 0.9,
+    "PartyA": payment_config.merchant,
+    "PartyB": phone,
+    "Remarks": "ok",
+    "occassion": "",
+    "QueueTimeOutURL": "https://mydomain.com/b2c/queue/",
+    "ResultURL": "https://mydomain.com/b2c/result/"
+    }
+    # Send the payment request to the owner's system 
+    owner_payment_url = os.getenv("OWNER_PAYMENT_URL")
+    response = requests.post(owner_payment_url, json=payload)
+
+    if response.json().get("ResponseCode") == "0":
+        conversation_id = response.json().get("OriginatorConversationID", "")
+        new_payment = PaymentDisbursement(
+            user_id=userID,  # Replace with actual user ID
+            amount=float(amount) * 0.90,
+            payment_date=datetime.utcnow(),
+            phone=phone,
+            transaction_ref="transaction_ref",
+            conversation_id=conversation_id,
+            success=True
+        )
+        db.add(new_payment)
+        db.commit()
+        return {"message": "Payment sent to owner successfully.", "details": response.json()}
+    else:
+        return {"error": "Failed to send payment to owner.", "details": response.text}

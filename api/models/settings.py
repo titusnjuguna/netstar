@@ -4,7 +4,6 @@ from api.db.session import Base
 
 class MpesaConfig(Base):
     __tablename__ = "mpesa_configs"
-
     id = Column(Integer, primary_key=True, index=True)
     environment = Column(String, default="sandbox")
     paybill_number = Column(String)

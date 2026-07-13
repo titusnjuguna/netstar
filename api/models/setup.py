@@ -20,6 +20,10 @@ class RouterInfo(Base):
     hostname = Column(String)
     reg_token = Column(String, unique=True, nullable=True)
     public_ip = Column(String, nullable=True)   # IP the VPS sees the router coming from
+    client_id = Column(Integer, ForeignKey('clients.id'), nullable=True)
+    client = relationship("Clients", back_populates="routers")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_seen = Column(DateTime, nullable=True)  # last time the router called home
 
 

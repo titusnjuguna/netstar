@@ -12,18 +12,18 @@ from api.services.auth import verify_token
 import json
 
 router=APIRouter(
-    prefix="/api",  # Optional but recommended
+    prefix="/api", 
     tags=["payment"]
 )
 
 
-@router.get('/v1/get/subscriptions', response_model=SubscriptionsListResponse, tags=["payment"])
-def get_subscriptions(page: int = Query(1, ge=1), db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+@router.get('/v1/get/subscriptions/{client_id}', response_model=SubscriptionsListResponse, tags=["payment"])
+def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     per_page = 20
-    total_items = db.query(Subscription).count()
+    total_items = db.query(Subscription).filter(Subscription.is_active == True, Subscription.product.client_id == client_id).count()
     total_pages = max((total_items + per_page - 1) // per_page, 1)
     subscriptions = (
-        db.query(Subscription)
+        db.query(Subscription).filter(Subscription.is_active == True, Subscription.product.client_id == client_id).
         .order_by(desc(Subscription.id))
         .offset((page - 1) * per_page)
         .limit(per_page)
@@ -35,9 +35,9 @@ def get_subscriptions(page: int = Query(1, ge=1), db: Session = Depends(get_db),
     for sub in subscriptions:
         package = sub.package
         latest_payment = (
-            db.query(Payment)
-            .filter(Payment.subscription_id == sub.id)
-            .order_by(desc(Payment.payment_date))
+            db.query(PaymentDisbursement)
+            .filter(PaymentDisbursement.subscription_id == sub.id)
+            .order_by(desc(PaymentDisbursement.payment_date))
             .first()
         )
         if not sub.is_active:
@@ -67,6 +67,28 @@ def get_subscriptions(page: int = Query(1, ge=1), db: Session = Depends(get_db),
         subscriptions=subscription_responses,
         pagination=PaginationInfo(page=page, perPage=per_page, totalItems=total_items, totalPages=total_pages),
     )
+
+@router.post('/v1/b2c/callback', response_model=GeneralResponse, tags=["payment"])
+def b2c_callback(request: Request, db: Session = Depends(get_db)):
+    try:
+        json_data = request.json()
+    except Exception:
+        raw = request.body()
+        json_data = json.loads(raw.decode('utf-8'))
+    print(f"B2C Callback received: {json_data}")
+    conversation_id = json_data.get("Result", {}).get("OriginatorConversationID")
+    result_code = json_data.get("Result", {}).get("ResultCode")
+    payment = db.query(PaymentDisbursement).filter(
+        PaymentDisbursement.conversation_id == conversation_id
+    ).first()
+    if not payment:
+        print(f"Callback for unknown ConversationID: {conversation_id}")
+        return GeneralResponse(message=f"Callback for unknown ConversationID: {conversation_id}", success=True, code=200)
+    payment.success = True if result_code == 0 else False
+    payment.transaction_ref = json_data.get("Result", {}).get("TransactionID", "")
+    payment.payment_date = datetime.utcnow()
+    db.commit()
+    return GeneralResponse(message="B2C callback received", success=True, code=200)
 
 
 @router.post('/payment/callback', response_model=GeneralResponse, tags=["payment"])

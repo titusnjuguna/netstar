@@ -57,6 +57,31 @@ def generate_token(user: User):
 
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
+@router.post("/v1/auth/register-user", response_model=UserResponse)
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    new_user = User(username=user.username, email=user.email, hashed_password=user.password)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@router.post("/v1/auth/create-superuser", response_model=UserResponse )
+def create_superuser(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    new_user = User(username=user.username, email=user.email, hashed_password=user.password, is_superuser=True)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
 @router.post("/v1/auth/login")
 def login(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(
@@ -69,15 +94,23 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
             status_code=401,
             detail="Invalid credentials"
         )
-
+    if not db_user.is_active:
+        return {
+            "status_code":403,
+            "access_token": None,
+            "token_type": "bearer",
+            "user": {}}
     token = generate_token(db_user)
-
     return {
+        "status_code":200,
         "access_token": token,
         "token_type": "bearer",
         "user": {
             "id": db_user.id,
             "email": db_user.email,
-            "username": db_user.username
+            "username": db_user.username,
+            "is_superuser": db_user.is_superuser,
+            "is_active": db_user.is_active,
+            "client": db_user.client
         }
     }
