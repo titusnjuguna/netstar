@@ -10,6 +10,7 @@ from api.models.payment import *
 from api.models.setup import *
 from api.models.users import *
 from api.models.settings import *
+from api.models.admin import *
 
 config = context.config
 
