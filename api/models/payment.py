@@ -5,7 +5,6 @@ from datetime import datetime
 from api.db.session import Base
 from api.models.setup import RouterInfo
 
-
 class Subscription(Base):
     __tablename__ = "subscriptions"
 
@@ -42,7 +41,9 @@ class HotspotPayments(Base):
     product_id = Column(Integer, ForeignKey("products.id"))
     CheckoutRequestID = Column(String)
     has_been_transferred = Column(Boolean, default=False)
-    client_id = Column(Integer, ForeignKey("clients.id"))
+    client_id = Column(Integer, ForeignKey("client.id"))
+    client = relationship("Clients",back_populates="hotspot_payments")
+    products = relationship("Products",back_populates="hotspot_payments")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class PaymentConfig(Base):

@@ -19,12 +19,12 @@ class RouterInfo(Base):
     phone_number = Column(String, nullable=True,default='254708520548')
     hostname = Column(String)
     reg_token = Column(String, unique=True, nullable=True)
-    public_ip = Column(String, nullable=True)   # IP the VPS sees the router coming from
+    public_ip = Column(String, nullable=True)  
     client_id = Column(Integer, ForeignKey('clients.id'), nullable=True)
     client = relationship("Clients", back_populates="routers")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_seen = Column(DateTime, nullable=True)  # last time the router called home
+    last_seen = Column(DateTime, nullable=True)  
 
 
 class Products(Base):
