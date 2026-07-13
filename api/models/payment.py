@@ -7,7 +7,7 @@ from api.models.setup import *
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True) # index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     device_identity = Column(String)  
     product_id = Column(Integer, ForeignKey("products.id"))
