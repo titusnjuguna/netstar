@@ -15,6 +15,7 @@ from api.routers.setup import router as set_up_router
 from api.routers.users import router as users_router
 from api.routers.dashboard import router as dashboard_router
 from api.routers.settings import router as settings_router
+from api.routers.admin import router as admin_router
 import asyncpg
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
@@ -66,3 +67,4 @@ app.include_router(set_up_router)
 app.include_router(users_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
+app.include_router(admin_router)
