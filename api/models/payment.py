@@ -45,6 +45,7 @@ class HotspotPayments(Base):
     client_id = Column(Integer, ForeignKey("clients.id"))
     client = relationship("Clients",back_populates="hotspot_payments")
     products = relationship("Products",back_populates="hotspot_payments")
+    subscriptions = relationship("Subscription", back_populates="hotspot_payments")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class PaymentConfig(Base):
