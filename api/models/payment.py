@@ -14,10 +14,10 @@ class Subscription(Base):
     start_date = Column(DateTime,default=datetime.utcnow)
     end_date = Column(DateTime)
     is_active = Column(Boolean, default=True)
-    payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
+    payment_id = Column(Integer, ForeignKey("hotspot_payments.id"), nullable=True)
     product = relationship("Products", back_populates="subscriptions")
-    payment =  relationship("HotspotPayments",back_populates="hotspot_payments")
-    user = relationship("User",back_populates="users")
+    payment =  relationship("HotspotPayments",back_populates="subscriptions")
+    user = relationship("User",back_populates="subscriptions")
 
 class PaymentDisbursement(Base):
     __tablename__ = "payments"
