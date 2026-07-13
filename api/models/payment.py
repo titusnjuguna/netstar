@@ -16,6 +16,8 @@ class Subscription(Base):
     is_active = Column(Boolean, default=True)
     payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
     product = relationship("Products", back_populates="subscriptions")
+    payment =  relationship("HotspotPayments",back_populates="hotspot_payments")
+    user = relationship("User",back_populates="users")
 
 class PaymentDisbursement(Base):
     __tablename__ = "payments"
