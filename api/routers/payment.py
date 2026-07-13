@@ -23,7 +23,7 @@ def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = 
     total_items = db.query(Subscription).filter(Subscription.is_active == True, Subscription.product.client_id == client_id).count()
     total_pages = max((total_items + per_page - 1) // per_page, 1)
     subscriptions = (
-        db.query(Subscription).filter(Subscription.is_active == True, Subscription.product.client_id == client_id).
+        db.query(Subscription).filter(Subscription.is_active == True, Subscription.product.client_id == client_id)
         .order_by(desc(Subscription.id))
         .offset((page - 1) * per_page)
         .limit(per_page)
@@ -36,8 +36,7 @@ def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = 
         package = sub.package
         latest_payment = (
             db.query(PaymentDisbursement)
-            .filter(PaymentDisbursement.subscription_id == sub.id)
-            .order_by(desc(PaymentDisbursement.payment_date))
+            .filter(PaymentDisbursement.subscription_id == sub.id).order_by(desc(PaymentDisbursement.payment_date))
             .first()
         )
         if not sub.is_active:
