@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from api.schemas.admin import ClientBillingResponse, ClientResponse
+from api.schemas.setup import RouterOut
 from fastapi import APIRouter, Depends
 from api.db.session import get_db
 from sqlalchemy.orm import Session
@@ -90,7 +91,7 @@ def get_billings(db: Session = Depends(get_db), _: dict = Depends(verify_token))
 
 
 
-@router.get("/all-routers", response_model=List[RouterInfo])
+@router.get("/all-routers", response_model=List[RouterOut])
 def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     routers = db.query(RouterInfo).all()
     return [
