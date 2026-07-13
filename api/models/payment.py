@@ -3,20 +3,19 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from api.db.session import Base
-from api.models.setup import RouterInfo
+from api.models.setup import *
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
-
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     device_identity = Column(String)  
-    package_id = Column(Integer, ForeignKey("products.id"))
+    product_id = Column(Integer, ForeignKey("products.id"))
     start_date = Column(DateTime,default=datetime.utcnow)
     end_date = Column(DateTime)
     is_active = Column(Boolean, default=True)
     payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
-    package = relationship("Products", back_populates="subscriptions")
+    product = relationship("Products", back_populates="subscriptions")
 
 class PaymentDisbursement(Base):
     __tablename__ = "payments"
@@ -28,7 +27,7 @@ class PaymentDisbursement(Base):
     transaction_ref = Column(String)
     conversation_id = Column(String)
     success = Column(Boolean, default=False)
-    user = relationship("User")
+    user = relationship("User",back_populates="payments")
    
 
 class HotspotPayments(Base):
