@@ -75,7 +75,7 @@ def create_superuser(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    new_user = User(username=user.username, email=user.email, hashed_password=user.password, is_superuser=True)
+    new_user = User(username=user.username, email=user.email, hashed_password=user.password, is_superuser=True,client_id=user.client)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)

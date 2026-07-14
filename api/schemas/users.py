@@ -4,9 +4,11 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
+    client: int
 
 class UserResponse(BaseModel):
     id: int
     username: str
     email: str
     is_active: bool
+    client : int
