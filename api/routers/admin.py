@@ -15,7 +15,7 @@ router = APIRouter(
     tags=["Admin"])
 
 @router.post("/create-client", response_model=ClientResponse)
-def create_client(client: ClientResponse, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+def create_client(client: ClientResponse, db: Session = Depends(get_db)):#, _: dict = Depends(verify_token)):
     db_client = Clients(
         name=client.name,
         email=client.email,
