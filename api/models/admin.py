@@ -16,6 +16,7 @@ class Clients(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     routers = relationship("RouterInfo", back_populates="client")
+    users = relationship("User", back_populates="client")
 
 
 
