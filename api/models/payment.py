@@ -8,8 +8,8 @@ from api.models.setup import *
 class Subscription(Base):
     __tablename__ = "subscriptions"
     id = Column(Integer, primary_key=True) # index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
     device_identity = Column(String)  
+    phone = Column(String) 
     product_id = Column(Integer, ForeignKey("products.id"))
     start_date = Column(DateTime,default=datetime.utcnow)
     end_date = Column(DateTime)
@@ -17,7 +17,7 @@ class Subscription(Base):
     payment_id = Column(Integer, ForeignKey("hotspot_payments.id"), nullable=True)
     product = relationship("Products", backref="subscriptions")
     payment =  relationship("HotspotPayments",back_populates="subscriptions")
-    user = relationship("User",back_populates="subscriptions")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class PaymentDisbursement(Base):
     __tablename__ = "payments"
