@@ -20,7 +20,7 @@ def create_client(client: ClientCreateRequest, db: Session = Depends(get_db)):#,
         name=client.name,
         email=client.email,
         phone_number=client.phone_number,
-        is_active=client.is_active
+        is_active=True
     )
     db.add(db_client)
     db.commit()
