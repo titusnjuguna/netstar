@@ -15,7 +15,7 @@ class Subscription(Base):
     end_date = Column(DateTime)
     is_active = Column(Boolean, default=True)
     payment_id = Column(Integer, ForeignKey("hotspot_payments.id"), nullable=True)
-    product = relationship("Products", back_populates="subscriptions")
+    product = relationship("Products", backref="subscriptions")
     payment =  relationship("HotspotPayments",back_populates="subscriptions")
     user = relationship("User",back_populates="subscriptions")
 

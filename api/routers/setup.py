@@ -558,8 +558,9 @@ def get_products_by_router(host: str = Query(..., description="Router hostname t
     ]
     return ProductsListResponse(message="Products fetched successfully", products=product_responses)
 
-@router.get("/v1/get/client/products", response_model= NewProductsListResponse)
+@router.get("/v1/get/client/products/{client}", response_model= NewProductsListResponse)
 def get_products_with_routers(
+    client : int,
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1, description="Page number (starts at 1)"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page (max 100)")):
@@ -567,7 +568,7 @@ def get_products_with_routers(
     total_pages = math.ceil(total_items / page_size) if total_items > 0 else 0
     offset = (page - 1) * page_size
     products = (
-        db.query(Products)
+        db.query(Products).filter(Products.router.client_id==client)
         .options(joinedload(Products.router))
         .order_by(desc(Products.id))
         .offset(offset)
