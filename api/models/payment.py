@@ -29,7 +29,7 @@ class PaymentDisbursement(Base):
     transaction_ref = Column(String)
     conversation_id = Column(String)
     success = Column(Boolean, default=False)
-    user = relationship("User",back_populates="payments")
+    user = relationship("User",backref="payments")
    
 
 class HotspotPayments(Base):
