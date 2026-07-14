@@ -41,7 +41,7 @@ class HotspotPayments(Base):
     CheckoutRequestID = Column(String)
     has_been_transferred = Column(Boolean, default=False)
     products = relationship("Products",backref="hotspot_payments")
-    subscription = relationship("Subscription", back_populates="hotspot_payments") 
+    subscription = relationship("Subscription", back_populates="payment") 
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class PaymentConfig(Base):
