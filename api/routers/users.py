@@ -79,7 +79,14 @@ def create_superuser(user: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return new_user
+    return UserResponse(
+        id = new_user.id,
+        username = new_user.username,
+        email = new_user.email,
+        is_active = new_user.is_active,
+        client = new_user.client.id
+
+    )
 
 
 @router.post("/v1/auth/login")
