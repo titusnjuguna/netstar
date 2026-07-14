@@ -6,7 +6,9 @@ from api.services.auth import verify_token, SECRET_KEY, ALGORITHM
 from pydantic import BaseModel
 from typing import List
 from api.db.session import get_db,SessionLocal
-from api.schemas.users import UserResponse,UserCreate
+from api.schemas.users import *
+from datetime import datetime, timedelta, timezone
+import jwt
 
 router = APIRouter(
     prefix="/api", 
@@ -45,8 +47,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db), _: dict = Depends(v
     db.commit()
     return {"message": "User deleted successfully"}
 
-from datetime import datetime, timedelta, timezone
-import jwt
+
 
 def generate_token(user: User):
     payload = {
@@ -90,12 +91,10 @@ def create_superuser(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/v1/auth/login")
-def login(user: UserCreate, db: Session = Depends(get_db)):
+def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(
         User.username == user.username
     ).first()
-    print (db_user)
-
     if not db_user or db_user.hashed_password != user.password:
         raise HTTPException(
             status_code=401,
