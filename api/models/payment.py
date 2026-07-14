@@ -10,13 +10,11 @@ class Subscription(Base):
     id = Column(Integer, primary_key=True) # index=True)
     device_identity = Column(String)  
     phone = Column(String) 
-    product_id = Column(Integer, ForeignKey("products.id"))
     start_date = Column(DateTime,default=datetime.utcnow)
     end_date = Column(DateTime)
     is_active = Column(Boolean, default=True)
     payment_id = Column(Integer, ForeignKey("hotspot_payments.id"), nullable=True)
-    product = relationship("Products", backref="subscriptions")
-    payment =  relationship("HotspotPayments",backref="subscriptions")
+    payment = relationship("HotspotPayments", back_populates="subscription")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class PaymentDisbursement(Base):
@@ -42,10 +40,8 @@ class HotspotPayments(Base):
     product_id = Column(Integer, ForeignKey("products.id"))
     CheckoutRequestID = Column(String)
     has_been_transferred = Column(Boolean, default=False)
-    client_id = Column(Integer, ForeignKey("clients.id"))
-    client = relationship("Clients",backref="hotspot_payments")
     products = relationship("Products",backref="hotspot_payments")
-    subscriptions = relationship("Subscription", backref="hotspot_payments")
+    subscription = relationship("Subscription", back_populates="hotspot_payments") 
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class PaymentConfig(Base):
