@@ -4,7 +4,7 @@ from api.services.auth import verify_token
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from api.schemas.admin import ClientBillingResponse, ClientResponse
+from api.schemas.admin import *
 from api.schemas.setup import RouterOut
 from fastapi import APIRouter, Depends
 from api.db.session import get_db
@@ -15,14 +15,11 @@ router = APIRouter(
     tags=["Admin"])
 
 @router.post("/create-client", response_model=ClientResponse)
-def create_client(client: ClientResponse, db: Session = Depends(get_db)):#, _: dict = Depends(verify_token)):
+def create_client(client: ClientCreateRequest, db: Session = Depends(get_db)):#, _: dict = Depends(verify_token)):
     db_client = Clients(
         name=client.name,
         email=client.email,
         phone_number=client.phone_number,
-        billing_address=client.billing_address,
-        billing_email=client.billing_email,
-        billing_phone=client.billing_phone,
         is_active=client.is_active
     )
     db.add(db_client)
@@ -32,7 +29,7 @@ def create_client(client: ClientResponse, db: Session = Depends(get_db)):#, _: d
 
 
 @router.get("/clients", response_model=List[ClientResponse])
-def get_clients(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+def get_clients(db: Session = Depends(get_db)):#, _: dict = Depends(verify_token)):
     clients = db.query(Clients).all()
     return [
         ClientResponse(
@@ -40,9 +37,6 @@ def get_clients(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
             name=c.name,
             email=c.email,
             phone_number=c.phone_number,
-            billing_address=c.billing_address,
-            billing_email=c.billing_email,
-            billing_phone=c.billing_phone,
             is_active=c.is_active,
             created_at=c.created_at,
             updated_at=c.updated_at

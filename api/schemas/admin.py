@@ -8,9 +8,7 @@ class ClientCreateRequest(BaseModel):
     name: str
     email: str
     phone_number: str
-    billing_address: str
-    billing_email: str
-    billing_phone: str  
+     
 
 
 class ClientResponse(BaseModel):
@@ -18,9 +16,6 @@ class ClientResponse(BaseModel):
     name: str
     email: str
     phone_number: str
-    billing_address: str
-    billing_email: str
-    billing_phone: str  
     is_active: bool
     created_at: datetime
     updated_at: datetime
