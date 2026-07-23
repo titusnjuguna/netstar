@@ -239,14 +239,14 @@ class MikrotikOperation:
         }
 
     def create_hotspot_user(self):
-        api = self.__initiate_connection()
-        users = api.get_resource('/ip/hotspot/user')
+        self.__initiate_connection()
+        users = self.api.get_resource('/ip/hotspot/user')
         limit_uptime = f"{self.uptime}m"
         profile_name = self.product.name
         
 
         def _add(profile_name):
-            users.add(**{'name': self.phone, 'password': self.password,
+            users.add(**{'name': self.phone, 'password': self.hotspot_password,
                         'limit-uptime': limit_uptime, 'profile': profile_name})
 
         def _update():
@@ -260,7 +260,7 @@ class MikrotikOperation:
                 dot_id = next((v for k, v in existing.items() if 'id' in k.lower()), None)
             if dot_id is None:
                 raise RuntimeError(f"Cannot find .id for user '{self.phone}' — dict: {existing}")
-            users.set(**{'.id': dot_id, 'password': self.password,
+            users.set(**{'.id': dot_id, 'password': self.hotspot_password,
                         'limit-uptime': limit_uptime, 'profile': profile_name})
             logger.info("Hotspot user updated: %s on %s", self.phone, self.host)
         try:
