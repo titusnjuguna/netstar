@@ -149,43 +149,59 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
 @router.get('/hotspot/pay/status/{reference}', response_model=GeneralResponse, tags=["payment"])
 def check_payment_status(reference: str, db: Session = Depends(get_db)):
     payment = db.query(HotspotPayments).filter(
-        HotspotPayments.CheckoutRequestID == reference
-    ).first()
+        HotspotPayments.CheckoutRequestID == reference).first()
     if not payment:
         return GeneralResponse(message="Payment not found", success=False, code=404)
 
     ref = payment.transaction_ref or ""
     phone = payment.phone
     paymentID = payment.id
-    uptime = 1
+
     if ref.startswith("FAILED:"):
         _, code, *desc_parts = ref.split(":")
         desc = ":".join(desc_parts)
         return GeneralResponse(message=f"Payment failed: {desc}", success=False, code=400)
     if ref.startswith("FRAUD:"):
         return GeneralResponse(message="Payment amount mismatch — contact support", success=False, code=400)
+
     if ref:
         product = db.query(Products).filter(Products.id == payment.product_id).first()
         router = db.query(RouterInfo).filter(RouterInfo.id == product.router_id).first() if product else None
         if product and router:
             hotspot_password = ref[-8:]
             uptime = int(product.duration) * 60
-            mkt=MikrotikOperation(router=router,product=product,phone=phone,uptime=uptime,hotspot_password=hotspot_password)
-            mkt.match_product_to_profile() 
-            try:
-                username,password = mkt.create_hotspot_user()
-                print(f"Hotspot user ready: {username} on router {router.name}")
-                #add records in subscription
-                now = datetime.now()
-                expire_date = now + timedelta(minutes=int(uptime))
-                sub=Subscription(
-                device_identity = "mobile", 
-                phone = phone, 
-                start_date =now,
-                end_date = expire_date,
-                is_active = True,
-                payment_id = paymentID
+
+            # Return existing credentials if subscription already created (idempotent poll)
+            existing_sub = db.query(Subscription).filter(Subscription.payment_id == paymentID).first()
+            if existing_sub:
+                return GeneralResponse(
+                    message="Payment successful",
+                    success=True,
+                    code=200,
+                    payment_ref=ref,
+                    hotspot_username=phone,
+                    hotspot_password=hotspot_password,
+                    login_url="http://10.10.10.1/login",
                 )
+
+            mkt = MikrotikOperation(router=router, product=product, phone=phone,
+                                    uptime=uptime, hotspot_password=hotspot_password)
+            mkt.match_product_to_profile()
+            try:
+                username, password = mkt.create_hotspot_user()
+                print(f"Hotspot user ready: {username} on router {router.name}")
+                now = datetime.utcnow()
+                expire_date = now + timedelta(minutes=uptime)
+                sub = Subscription(
+                    device_identity="mobile",
+                    phone=phone,
+                    start_date=now,
+                    end_date=expire_date,
+                    is_active=True,
+                    payment_id=paymentID,
+                )
+                db.add(sub)
+                db.commit()
                 return GeneralResponse(
                     message="Payment successful",
                     success=True,
@@ -193,13 +209,15 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                     payment_ref=ref,
                     hotspot_username=username,
                     hotspot_password=password,
-                    login_url=f"http://10.10.10.1/login"
+                    login_url="http://10.10.10.1/login",
                 )
             except Exception as e:
                 import traceback
                 print(f"Failed to create hotspot user: {e}\n{traceback.format_exc()}")
+                return GeneralResponse(message=f"Payment confirmed but router setup failed: {e}", success=False, code=500)
+
         return GeneralResponse(message="Payment successful", success=True, code=200)
-    # transaction_ref still empty — STK sent but user hasn't acted yet
+
     return GeneralResponse(message="Payment pending", success=False, code=202)
     
 
