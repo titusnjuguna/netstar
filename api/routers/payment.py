@@ -1,5 +1,5 @@
 from fastapi import APIRouter,Depends,Request,Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 from datetime import datetime
 from api.db.session import get_db
@@ -20,10 +20,18 @@ router=APIRouter(
 @router.get('/v1/get/subscriptions/{client_id}', response_model=SubscriptionsListResponse, tags=["payment"])
 def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     per_page = 20
-    total_items = db.query(Subscription).filter(Subscription.is_active == True, Subscription.product.client_id == client_id).count()
+    base_query = (
+        db.query(Subscription)
+        .join(HotspotPayments, Subscription.payment_id == HotspotPayments.id)
+        .join(Products, HotspotPayments.product_id == Products.id)
+        .join(RouterInfo, Products.router_id == RouterInfo.id)
+        .filter(Subscription.is_active == True, RouterInfo.client_id == client_id)
+    )
+    total_items = base_query.count()
     total_pages = max((total_items + per_page - 1) // per_page, 1)
     subscriptions = (
-        db.query(Subscription).filter(Subscription.is_active == True, Subscription.product.client_id == client_id)
+        base_query
+        .options(joinedload(Subscription.payment).joinedload(HotspotPayments.products))
         .order_by(desc(Subscription.id))
         .offset((page - 1) * per_page)
         .limit(per_page)
@@ -33,12 +41,7 @@ def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = 
     now = datetime.utcnow()
     subscription_responses = []
     for sub in subscriptions:
-        package = sub.package
-        latest_payment = (
-            db.query(PaymentDisbursement)
-            .filter(PaymentDisbursement.subscription_id == sub.id).order_by(desc(PaymentDisbursement.payment_date))
-            .first()
-        )
+        package = sub.payment.products if sub.payment else None
         if not sub.is_active:
             status = "inactive"
         elif sub.end_date and sub.end_date < now:
@@ -50,7 +53,7 @@ def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = 
             SubscriptionOut(
                 id=f"s{sub.id}",
                 mac="",
-                phone=latest_payment.phone if latest_payment else "",
+                phone=sub.phone or "",
                 productName=package.name if package else "",
                 startTime=sub.start_date,
                 expiryTime=sub.end_date,
