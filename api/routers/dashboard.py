@@ -32,7 +32,7 @@ def get_dashboard_summary(
     # --- Revenue & sessions scoped to THIS client ---
     total_revenue = (
         db.query(func.sum(HotspotPayments.amount))
-        .filter(HotspotPayments.client_id == client)   # ← adjust col name to your schema
+        .filter(HotspotPayments.products.router.client.id == client)   # ← adjust col name to your schema
         .scalar()
     ) or 0
 

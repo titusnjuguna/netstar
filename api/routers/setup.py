@@ -568,7 +568,9 @@ def get_products_with_routers(
     total_pages = math.ceil(total_items / page_size) if total_items > 0 else 0
     offset = (page - 1) * page_size
     products = (
-        db.query(Products).filter(Products.router.client_id==client)
+        db.query(Products)
+        .join(RouterInfo, Products.router_id == RouterInfo.id)
+        .filter(RouterInfo.client_id == client)
         .options(joinedload(Products.router))
         .order_by(desc(Products.id))
         .offset(offset)
