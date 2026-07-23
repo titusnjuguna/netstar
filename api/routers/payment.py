@@ -1,7 +1,7 @@
 from fastapi import APIRouter,Depends,Request,Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
-from datetime import datetime
+from datetime import datetime,timedelta
 from api.db.session import get_db
 from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,PaymentConfigResponse,GeneralResponse,SubscriptionOut,PaginationInfo,SubscriptionsListResponse
 from api.models.payment import *
@@ -155,6 +155,9 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
         return GeneralResponse(message="Payment not found", success=False, code=404)
 
     ref = payment.transaction_ref or ""
+    phone = payment.phone
+    paymentID = payment.id
+    uptime = 1
     if ref.startswith("FAILED:"):
         _, code, *desc_parts = ref.split(":")
         desc = ":".join(desc_parts)
@@ -165,17 +168,24 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
         product = db.query(Products).filter(Products.id == payment.product_id).first()
         router = db.query(RouterInfo).filter(RouterInfo.id == product.router_id).first() if product else None
         if product and router:
-            MikrotikOperation(router=router,product=product).match_product_to_profile() 
             hotspot_password = ref[-8:]
+            uptime = int(product.duration) * 60
+            mkt=MikrotikOperation(router=router,product=product,phone=phone,uptime=uptime,hotspot_password=hotspot_password)
+            mkt.match_product_to_profile() 
             try:
-                username,password = create_hotspot_user(
-                    router=router,
-                    phone=payment.phone,
-                    duration_minutes=product.duration,
-                    profile_name=product.name,
-                    password=hotspot_password,
-                )
+                username,password = mkt.create_hotspot_user()
                 print(f"Hotspot user ready: {username} on router {router.name}")
+                #add records in subscription
+                now = datetime.now()
+                expire_date = now + timedelta(minutes=int(uptime))
+                sub=Subscription(
+                device_identity = "mobile", 
+                phone = phone, 
+                start_date =now,
+                end_date = expire_date,
+                is_active = True,
+                payment_id = paymentID
+                )
                 return GeneralResponse(
                     message="Payment successful",
                     success=True,

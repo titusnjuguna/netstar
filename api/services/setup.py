@@ -58,6 +58,9 @@ class MikrotikOperation:
         self.api = None
         self.product = kwargs.get("product")
         self.host_name = router.hostname
+        self.phone = kwargs.get("phone")
+        self.uptime =  kwargs.get("uptime")
+        self.hotspot_password = kwargs("hotspot_password")
 
     def __initiate_connection(self):
         try:
@@ -196,7 +199,7 @@ class MikrotikOperation:
             self.api.get_resource('/tool').call('fetch', arguments={
                 'url': f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
                 'output': 'file',
-                'dst-path': 'hotspot/products.json',
+                'dst-path': 'products.json',
             })
         except Exception as e:
             logger.warning("refresh_router_products skipped on %s: %s", self.host, e)
@@ -210,13 +213,77 @@ class MikrotikOperation:
             self.api.get_resource('/tool').call('fetch', arguments={
                 'url': f"http://167.86.76.158:8070/api/v1/get/hotspot-details?host={self.host_name}",
                 'output': 'file',
-                'dst-path': 'hotspot/more.json',
+                'dst-path': 'more.json',
             })
         except Exception as e:
             logger.warning("fetch_hotspot_details skipped on %s: %s", self.host, e)
         finally:
             self.connection.disconnect()
         return True
+
+    def get_active_session(self, phone: str) -> dict:
+        """Return MAC, IP, and hostname for a currently-connected hotspot user."""
+        self.__initiate_connection()
+        try:
+            active = list(self.api.get_resource('/ip/hotspot/active').get())
+        finally:
+            self.connection.disconnect()
+        session = next((s for s in active if s.get('user') == phone), None)
+        if not session:
+            return {}
+        return {
+            'mac': session.get('mac-address', ''),
+            'ip': session.get('address', ''),
+            'hostname': session.get('host-name', ''),
+            'uptime': session.get('uptime', ''),
+        }
+
+    def create_hotspot_user(self):
+        api = self.__initiate_connection()
+        users = api.get_resource('/ip/hotspot/user')
+        limit_uptime = f"{self.uptime}m"
+        profile_name = self.product.name
+        
+
+        def _add(profile_name):
+            users.add(**{'name': self.phone, 'password': self.password,
+                        'limit-uptime': limit_uptime, 'profile': profile_name})
+
+        def _update():
+            all_users = list(users.get())
+            existing = next((u for u in all_users if u.get('name') == self.phone), None)
+            if not existing:
+                raise RuntimeError(f"User '{self.phone}' not found for update on {self.host}")
+            logger.info("Existing user dict for %s: %s", self.phone, existing)
+            dot_id = existing.get('.id') or existing.get('id')
+            if dot_id is None:
+                dot_id = next((v for k, v in existing.items() if 'id' in k.lower()), None)
+            if dot_id is None:
+                raise RuntimeError(f"Cannot find .id for user '{self.phone}' — dict: {existing}")
+            users.set(**{'.id': dot_id, 'password': self.password,
+                        'limit-uptime': limit_uptime, 'profile': profile_name})
+            logger.info("Hotspot user updated: %s on %s", self.phone, self.host)
+        try:
+            _add(profile_name)
+            logger.info("Hotspot user created: %s on %s", self.phone, self.host)
+        except Exception as add_err:
+            err_str = str(add_err).lower()
+            if 'already have user' in err_str:
+                _update()
+            elif 'does not match any value of profile' in err_str:
+                logger.warning("Profile '%s' not found on %s, falling back to default", profile_name, self.host)
+                try:
+                    _add('default')
+                    logger.info("Hotspot user created with default profile: %s on %s", self.phone, self.host)
+                except Exception as fallback_err:
+                    if 'already have user' in str(fallback_err).lower():
+                        _update()
+                    else:
+                        raise RuntimeError(f"Cannot create hotspot user '{self.phone}': {fallback_err}")
+            else:
+                raise RuntimeError(f"Cannot create hotspot user '{self.phone}': {add_err}")
+        return self.phone, self.password
+
 
 def render_captive_portal_html(hotspot_name, router_id, till_number, api_base_url=API_BASE_URL):
     template = _template_env.get_template("hotspot_login.html")
@@ -496,6 +563,7 @@ def get_router_connection(ROUTER_IP,ROUTER_USERNAME,ROUTER_PASSWORD):
 
 def create_hotspot_user(router, phone, duration_minutes, profile_name, password):
     host = router.tunnel_ip or router.ip_address
+    # api = MikrotikOperation()
     api = get_router_connection(host, router.user_name, router.password)
     users = api.get_resource('/ip/hotspot/user')
     limit_uptime = f"{duration_minutes}m"
@@ -716,6 +784,7 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :put "Step 1: Creating scoped API user..."
 :if ([:len [/user group find name=api-only]] = 0) do={
   /user group add name=api-only policy=api,rest-api,read,write,ssh,ftp
+  /user group set [find name=api-only] policy=read,write,api,rest-api,ssh,ftp,test,sensitive
 }
 :if ([:len [/user find name=$apiUser]] = 0) do={
   /user add name=$apiUser password=$apiPassword group=api-only
