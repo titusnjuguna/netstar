@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, extract, cast, Date
+from sqlalchemy import func, extract, cast, Date
 from datetime import date, timedelta
 from api.db.session import get_db
 from api.models.payment import  Subscription,HotspotPayments
-from api.models.setup import RouterInfo
+from api.models.setup import RouterInfo, Products
 from api.services.auth import verify_token
 from api.schemas.dashboard import (
     DashboardSummaryResponse,
@@ -29,59 +29,52 @@ def get_dashboard_summary(
 ):
     today = date.today()
 
-    # --- Revenue & sessions scoped to THIS client ---
+    # HotspotPayments filtered by client: join through Products → RouterInfo
+    def _payments_for_client(q):
+        return (
+            q.join(Products, HotspotPayments.product_id == Products.id)
+             .join(RouterInfo, Products.router_id == RouterInfo.id)
+             .filter(RouterInfo.client_id == client)
+        )
+
     total_revenue = (
-        db.query(func.sum(HotspotPayments.amount))
-        .filter(HotspotPayments.products.router.client.id == client)   # ← adjust col name to your schema
+        _payments_for_client(db.query(func.sum(HotspotPayments.amount)))
         .scalar()
     ) or 0
 
     active_sessions = (
         db.query(Subscription)
-        .filter(
-            Subscription.is_active.is_(True),
-            Subscription.client_id == client,          # ← adjust if needed
-        )
+        .join(HotspotPayments, Subscription.payment_id == HotspotPayments.id)
+        .join(Products, HotspotPayments.product_id == Products.id)
+        .join(RouterInfo, Products.router_id == RouterInfo.id)
+        .filter(Subscription.is_active.is_(True), RouterInfo.client_id == client)
         .count()
     )
 
     total_routers = (
         db.query(RouterInfo)
-        .filter(
-            RouterInfo.is_active.is_(True),
-            RouterInfo.client == client,
-        )
+        .filter(RouterInfo.client_id == client)
         .count()
     )
 
-    # --- Vouchers sold this calendar month (fixed precedence + extract) ---
     vouchers_sold = (
-        db.query(HotspotPayments)
+        _payments_for_client(db.query(HotspotPayments))
         .filter(
-            (extract("month", HotspotPayments.payment_date) == today.month) &
-            (extract("year",  HotspotPayments.payment_date) == today.year),
-            HotspotPayments.client_id == client,       # ← if applicable
+            extract("month", HotspotPayments.payment_date) == today.month,
+            extract("year",  HotspotPayments.payment_date) == today.year,
         )
         .count()
     )
 
-    # --- Today's sales as REVENUE, not count ---
     today_sales = (
-        db.query(func.sum(HotspotPayments.amount))
-        .filter(
-            cast(HotspotPayments.payment_date, Date) == today,
-            HotspotPayments.client_id == client,
-        )
+        _payments_for_client(db.query(func.sum(HotspotPayments.amount)))
+        .filter(cast(HotspotPayments.payment_date, Date) == today)
         .scalar()
     ) or 0
 
-    # --- Last 7 days (today inclusive) ---
     weekly_sales = (
-        db.query(func.sum(HotspotPayments.amount))
-        .filter(
-            cast(HotspotPayments.payment_date, Date) >= today - timedelta(days=6),
-            HotspotPayments.client_id == client,
-        )
+        _payments_for_client(db.query(func.sum(HotspotPayments.amount)))
+        .filter(cast(HotspotPayments.payment_date, Date) >= today - timedelta(days=6))
         .scalar()
     ) or 0
 
