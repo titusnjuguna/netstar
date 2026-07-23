@@ -58,12 +58,10 @@ def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = 
                 startTime=sub.start_date,
                 expiryTime=sub.end_date,
                 dataUsed=0,
-                dataCap=int(package.data_limit * 1024 * 1024) if package and package.data_limit else 0,
-                status=status,
-                ipAddress="",
-            )
-        )
-
+                dataCap=0,
+                status="Active"
+                ipAddress=""
+            ))
     return SubscriptionsListResponse(
         message="Subscriptions fetched successfully",
         subscriptions=subscription_responses,
