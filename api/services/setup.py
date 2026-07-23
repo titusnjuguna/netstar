@@ -60,7 +60,7 @@ class MikrotikOperation:
         self.host_name = router.hostname
         self.phone = kwargs.get("phone")
         self.uptime =  kwargs.get("uptime")
-        self.hotspot_password = kwargs("hotspot_password")
+        self.hotspot_password = kwargs.get("hotspot_password")
 
     def __initiate_connection(self):
         try:
