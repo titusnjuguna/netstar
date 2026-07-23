@@ -117,9 +117,9 @@ def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depend
         return GeneralResponse(message=f"Error initiating payment: {e}", success=False, code=400)
 
 
-@router.get("/v1/get/routers", response_model=RoutersListResponse)
-def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
-    routers = db.query(RouterInfo).all()
+@router.get("/v1/get/client/routers/{client}", response_model=RoutersListResponse)
+def get_all_routers(client:int,db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    routers = db.query(RouterInfo).filter(RouterInfo.client_id == client)
     router_responses = []
     for r in routers:
         host = r.tunnel_ip or r.ip_address
@@ -410,7 +410,6 @@ def generate_mikrotik_setup_script(
     )
  
 
- 
 @router.post("/v1/register/callback", response_model=RegisterCallbackResponse)
 def register_callback(
     req: RegisterCallbackRequest,
