@@ -59,7 +59,7 @@ def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = 
                 expiryTime=sub.end_date,
                 dataUsed=0,
                 dataCap=0,
-                status="Active"
+                status="Active",
                 ipAddress=""
             ))
     return SubscriptionsListResponse(
