@@ -192,22 +192,30 @@ class MikrotikOperation:
 
     def refresh_router_products(self):
         self.__initiate_connection()
-        self.api.get_resource('/tool').call('fetch', arguments={
-            'url': f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
-            'output': 'file',
-            'dst-path': 'hotspot/products.json',
-        })
-        self.connection.disconnect()
+        try:
+            self.api.get_resource('/tool').call('fetch', arguments={
+                'url': f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
+                'output': 'file',
+                'dst-path': 'hotspot/products.json',
+            })
+        except Exception as e:
+            logger.warning("refresh_router_products skipped on %s: %s", self.host, e)
+        finally:
+            self.connection.disconnect()
         return True
 
     def fetch_hotspot_details(self):
         self.__initiate_connection()
-        self.api.get_resource('/tool').call('fetch', arguments={
-            'url': f"http://167.86.76.158:8070/api/v1/get/hotspot-details?host={self.host_name}",
-            'output': 'file',
-            'dst-path': 'hotspot/more.json',
-        })
-        self.connection.disconnect()
+        try:
+            self.api.get_resource('/tool').call('fetch', arguments={
+                'url': f"http://167.86.76.158:8070/api/v1/get/hotspot-details?host={self.host_name}",
+                'output': 'file',
+                'dst-path': 'hotspot/more.json',
+            })
+        except Exception as e:
+            logger.warning("fetch_hotspot_details skipped on %s: %s", self.host, e)
+        finally:
+            self.connection.disconnect()
         return True
 
 def render_captive_portal_html(hotspot_name, router_id, till_number, api_base_url=API_BASE_URL):
