@@ -751,6 +751,8 @@ def apply_wireguard_peer(public_key: str, tunnel_ip: str) -> None:
 def generate_password(length: int = 20) -> str:
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
  
 ROUTEROS_SCRIPT_TEMPLATE = """\
 # ============================================================
@@ -779,12 +781,14 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :local hubPort        @@HUB_PORT@@
 :local registerUrl    "@@CALLBACK_URL@@"
 :local regToken       "@@REGISTRATION_TOKEN@@"
+:local backendUrl     "@@BACKEND_URL@@"
  
 # ---- 1. Scoped API user for backend automation (not 'admin') ----
 :put "Step 1: Creating scoped API user..."
 :if ([:len [/user group find name=api-only]] = 0) do={
-  /user group add name=api-only policy=api,rest-api,read,write,ssh,ftp
-  /user group set [find name=api-only] policy=read,write,api,rest-api,ssh,ftp,test,sensitive
+  /user group add name=api-only policy=api,rest-api,read,write,ssh,ftp,test,sensitive
+} else={
+  /user group set [find name=api-only] policy=api,rest-api,read,write,ssh,ftp,test,sensitive
 }
 :if ([:len [/user find name=$apiUser]] = 0) do={
   /user add name=$apiUser password=$apiPassword group=api-only
@@ -853,11 +857,11 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
  
 # ---- 5c. Cache product list from platform (host passed as query param) ----
 :put "Step 5c: Caching product list..."
-/tool fetch url=("http://" . $hubHost . ":8070/api/v1/get/products?host=" . $hotspotName) \\
+/tool fetch url=($backendUrl . "api/v1/get/products?host=" . $hotspotDnsName) \\
   output=file dst-path="hotspot/products.json"
 :if ([:len [/system scheduler find name=refresh-products]] = 0) do={
   /system scheduler add name=refresh-products interval=1h \\
-    on-event=(":local h \\"" . $hubHost . "\\"\\r\\n:local n \\"" . $hotspotName . "\\"\\r\\n/tool fetch url=(\\"http://\\" . \\$h . \\":8070/api/v1/get/products?host=\\" . \\$n) output=file dst-path=\\"hotspot/products.json\\"")
+    on-event=(":local b \\"" . $backendUrl . "\\"\\r\\n:local n \\"" . $hotspotDnsName . "\\"\\r\\n/tool fetch url=(\\$b . \\"api/v1/get/products?host=\\" . \\$n) output=file dst-path=\\"hotspot/products.json\\"")
 }
  
 # ---- 6. Voucher duration profiles ----
@@ -958,7 +962,10 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :delay 5
 :local myPublicKey [/interface wireguard get [find name=wg-hub] public-key]
 :local myTunnelIp [/ip address get [find interface=wg-hub] address]
-
+:local payload ("{\\"token\\":\\"" . $regToken . "\\",\\"public_key\\":\\"" . $myPublicKey . "\\"}")
+:local result [/tool fetch url=$registerUrl http-method=post \\
+  http-header-field="Content-Type: application/json" \\
+  http-data=$payload output=user as-value]
  
 :put ""
 :put "============================================================"
@@ -981,6 +988,7 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :put ""
 :put "------------------------------------------------------------"
 """
+
  
 def render_setup_script(
     router_id: int,
