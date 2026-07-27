@@ -751,6 +751,7 @@ def generate_password(length: int = 20) -> str:
 
 
  
+
 ROUTEROS_SCRIPT_TEMPLATE = """\
 # ============================================================
 # MikroTik Hotspot + WireGuard Setup (auto-generated)
@@ -852,13 +853,6 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
   /ip hotspot walled-garden ip add dst-address=$hubHost protocol=tcp action=accept comment="platform payment API"
 }
  
-# ---- 5c. Cache product list from platform (host passed as query param) ----
-:put "Step 5c: Caching product list..."
-:if ([:len [/system scheduler find name=refresh-products]] = 0) do={
-  /system scheduler add name=refresh-products interval=1h start-time=startup \
-    on-event=(":local b \"" . $backendUrl . "\"\r\n:local n \"" . $hotspotDnsName . "\"\r\n/tool fetch url=(\$b . \"api/v1/get/products?host=\" . \$n) output=file dst-path=\"hotspot/products.json\"")
-}
- 
 # ---- 6. Voucher duration profiles ----
 :put "Step 6: Creating voucher profiles..."
 :if ([:len [/ip hotspot user profile find name=profile-30min]] = 0) do={
@@ -902,15 +896,16 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
  
 # ---- 9. Certificate + REST API, reachable only over the tunnel ----
 :put "Step 9: Enabling REST API..."
-:if ([:len [/certificate find name=local-ca]] = 0) do={
+:if ([:len [/certificate find common-name=local-ca]] = 0) do={
   /certificate add name=local-ca common-name=local-ca days-valid=3650 key-usage=key-cert-sign,crl-sign
-  /certificate sign local-ca ca-crl-host=$tunnelIp name=local-ca
+  /certificate sign local-ca ca-crl-host=$tunnelIp
 }
-:if ([:len [/certificate find name=api-cert]] = 0) do={
+:if ([:len [/certificate find common-name=$tunnelIp]] = 0) do={
   /certificate add name=api-cert common-name=$tunnelIp days-valid=3650 key-usage=tls-server
-  /certificate sign api-cert ca=local-ca name=api-cert
+  /certificate sign api-cert ca=[find common-name=local-ca]
 }
-/ip service set www-ssl certificate=api-cert disabled=no
+:local apiCert [/certificate find common-name=$tunnelIp]
+/ip service set www-ssl certificate=$apiCert disabled=no
  
 # Enable the plaintext binary API (port 8728) for backend automation.
 # This is safe here because it is scoped to ONLY be reachable from the
@@ -951,13 +946,24 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
   :put "  No default login.html found — nothing to remove."
 }
  
-# ---- 12. Register this router with the platform ----
-:put "Step 12: Registering with platform..."
-:put "  Waiting for WireGuard tunnel to establish..."
+# ---- 12. Register + cache products (after WireGuard tunnel is up) ----
+:put "Step 12: Waiting for WireGuard tunnel to establish..."
 :delay 5
+ 
+# Cache product list now that tunnel is up
+:put "Step 12a: Scheduling and caching product list..."
+:if ([:len [/system scheduler find name=refresh-products]] = 0) do={
+  :local fetchCmd ("/tool fetch url=\\"" . $backendUrl . "get/products?host=" . $hotspotDnsName . "\\" output=file dst-path=\\"hotspot/products.json\\"")
+  /system scheduler add name=refresh-products interval=1h start-time=startup on-event=$fetchCmd
+}
+
+ 
+# Register router with platform
+:put "Step 12b: Registering with platform..."
 :local myPublicKey [/interface wireguard get [find name=wg-hub] public-key]
 :local myTunnelIp [/ip address get [find interface=wg-hub] address]
 
+ 
 :put ""
 :put "============================================================"
 :put " SETUP COMPLETE - registration response from platform:"
@@ -973,11 +979,10 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :put ""
 :put "Public key:"
 :put $myPublicKey
-:put ""
+:put "--------------"
 :put "Tunnel IP:"
 :put $myTunnelIp
-:put ""
-:put ""
+:put "--------------"
 :put "Registration Token"
 :put $regToken
 :put "------------------------------------------------------------"
