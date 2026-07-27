@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 import socket
 import select
@@ -7,28 +8,24 @@ import time
 import ftplib
 import string
 import secrets
+import logging
 import concurrent.futures
 from io import BytesIO
 import subprocess
 from api.schemas.setup import *
-from api.db.session import get_db
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.models.setup import RouterInfo
-import logging
 from fastapi import  HTTPException
 from routeros_api import RouterOsApiPool, exceptions
 from librouteros import connect
 from jinja2 import Environment, FileSystemLoader
-import os
 from dotenv import load_dotenv
 from sqlalchemy import  select
-import re
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 _template_env = Environment(
@@ -960,11 +957,7 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :delay 5
 :local myPublicKey [/interface wireguard get [find name=wg-hub] public-key]
 :local myTunnelIp [/ip address get [find interface=wg-hub] address]
-:local payload ("{\\"token\\":\\"" . $regToken . "\\",\\"public_key\\":\\"" . $myPublicKey . "\\"}")
-:local result [/tool fetch url=$registerUrl http-method=post \\
-  http-header-field="Content-Type: application/json" \\
-  http-data=$payload output=user as-value]
- 
+
 :put ""
 :put "============================================================"
 :put " SETUP COMPLETE - registration response from platform:"
@@ -984,6 +977,9 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :put "Tunnel IP:"
 :put $myTunnelIp
 :put ""
+:put ""
+:put "Registration Token"
+:put $regToken
 :put "------------------------------------------------------------"
 """
 
