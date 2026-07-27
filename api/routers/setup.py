@@ -1,6 +1,7 @@
 import json
 from datetime import datetime,timezone
 from api.db import db
+from api.services.setup import _Settings
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from api.services.setup import * 
@@ -451,6 +452,7 @@ def set_up_wireguard_router_to_backend(req: WireGuardSet, _: dict = Depends(veri
 
 @router.get("/v1/get/wireguard")
 def get_wireguard_backend_to_router(_: dict = Depends(verify_token)):
+    settings = _Settings()
     return {
         "hub_public_key": settings.HUB_PUBLIC_KEY,
         "hub_endpoint_host": settings.HUB_ENDPOINT_HOST,
