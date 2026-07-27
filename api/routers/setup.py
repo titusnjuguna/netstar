@@ -420,32 +420,15 @@ def register_callback(
     result = db.execute(
         select(RouterInfo).where(RouterInfo.reg_token == req.token)
     ).scalar_one_or_none()
- 
     if result is None:
         raise HTTPException(status_code=404, detail="Unknown or expired registration token")
- 
-    # Idempotent: if it's already active with the same key, just re-confirm
-    # rather than erroring — the router may retry this call on its own.
-    if result.status == "active" and result.wg_public_key != req.public_key:
-        raise HTTPException(
-            status_code=409,
-            detail="This router is already registered with a different key.",
-        )
- 
-    apply_wireguard_peer(public_key=req.public_key, tunnel_ip=result.tunnel_ip)
- 
-    result.wg_public_key = req.public_key
-    result.status = "active"
-    result.registered_at = datetime.now(timezone.utc)
-    db.commit()
- 
+    apply_wireguard_peer(public_key=req.public_key, tunnel_ip=result.tunnel_ip) 
     return RegisterCallbackResponse(
         status="active",
         hub_public_key=settings.HUB_PUBLIC_KEY,
         hub_endpoint_host=settings.HUB_ENDPOINT_HOST,
         hub_endpoint_port=settings.HUB_ENDPOINT_PORT,
-        assigned_tunnel_ip=result.tunnel_ip,
-    )
+        assigned_tunnel_ip=result.tunnel_ip)
  
 @router.get("/v1/get/router-ip")
 def get_router_ip_address(db: Session = Depends(get_db)):
