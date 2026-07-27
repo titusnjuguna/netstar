@@ -374,6 +374,7 @@ def generate_mikrotik_setup_script(
     tunnel_ip = allocate_tunnel_ip(db)
     api_username = req.username
     api_password = req.password
+    client = req.client
     registration_token = generate_reg_token()
     hostname = f'{req.hotspot_name}.wifi.babybull.cc'
     hostname = hostname.lower().replace(" ", "")
@@ -385,7 +386,8 @@ def generate_mikrotik_setup_script(
         password=api_password,
         reg_token=registration_token,
         till_number = req.till_number,
-        hostname = hostname
+        hostname = hostname,
+        client_id = client
     )
   
     script = render_setup_script(
@@ -405,6 +407,7 @@ def generate_mikrotik_setup_script(
     return SetupScriptResponse(
         router_id=new_router.id,
         tunnel_ip=tunnel_ip,
+        client: client,
         registration_token=registration_token,
         script=script,
     )

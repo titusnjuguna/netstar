@@ -13,6 +13,7 @@ class RouterCreate(BaseModel):
     hotspot_name: str = Field(..., examples=["Tano@Bora"])
     wan_interface: str = "ether1"
     wifi_country: str = "kenya"
+    client : int
 
 
 class ProductOut(BaseModel):
