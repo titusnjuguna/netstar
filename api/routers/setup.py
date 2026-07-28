@@ -512,7 +512,7 @@ def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depe
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail=f"Timed out connecting to {host} — tunnel may not be up yet")
 
-    return {"message": f"login.html deployed to {host}:hotspot/login.html"}
+    return {"message": f"login.html deployed to {host}:hotspot/login.html","code":200}
 
 @router.get("/v1/get/hotspot-details")
 def get_hotspot_details(host: str = Query(..., description="Router hostname to fetch details"), db: Session = Depends(get_db)):
