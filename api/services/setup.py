@@ -153,9 +153,8 @@ class MikrotikOperation:
     def get_router_live_stats(self):
         try:
             self.__initiate_connection()
-            api = self.api
-            resource = list(api.get_resource('/system/resource').get())
-            active = list(api.get_resource('/ip/hotspot/active').get())
+            resource = list(self.api.get_resource('/system/resource').get())
+            active = list(self.api.get_resource('/ip/hotspot/active').get())
             self.connection.disconnect()
             info = resource[0] if resource else {}
             total_memory = int(info.get('total-memory', 0) or 0)
@@ -197,7 +196,7 @@ class MikrotikOperation:
             self.api.get_resource('/tool').call('fetch', arguments={
                 'url': f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
                 'output': 'file',
-                'dst-path': 'products.json',
+                'dst-path': 'hotspot/products.json',
             })
         except Exception as e:
             logger.warning("refresh_router_products skipped on %s: %s", self.host, e)
@@ -821,6 +820,21 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
   /interface bridge port add bridge=bridge-hotspot interface=wlan1
 }
  
+# ---- 3b. WAN DHCP client — ensure ether1 gets an IP from upstream ----
+:put "Step 3b: Ensuring WAN interface has internet..."
+:if ([:len [/ip dhcp-client find interface=$wanInterface]] = 0) do={
+  /ip dhcp-client add interface=$wanInterface disabled=no
+  :put "  Added DHCP client on $wanInterface — waiting for lease..."
+  :delay 5
+} else={
+  :put "  DHCP client already exists on $wanInterface."
+}
+:if ([:len [/ip dhcp-client find interface=$wanInterface status=bound]] = 0) do={
+  /ip dhcp-client renew [find interface=$wanInterface]
+  :delay 5
+  :put "  Renewed DHCP lease on $wanInterface."
+}
+ 
 # ---- 4. IP / DHCP for hotspot clients ----
 :put "Step 4: Setting up hotspot IP/DHCP..."
 :if ([:len [/ip address find address=10.10.10.1/24]] = 0) do={
@@ -954,7 +968,7 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 # Cache product list now that tunnel is up
 :put "Step 12a: Scheduling and caching product list..."
 :if ([:len [/system scheduler find name=refresh-products]] = 0) do={
-  :local fetchCmd ("/tool fetch url=\\"" . $backendUrl . "get/products?host=" . $hotspotDnsName . "\\" output=file dst-path=\\"hotspot/products.json\\"")
+  :local fetchCmd ("/tool fetch url=\\"" . $backendUrl . "api/v1/get/products?host=" . $hotspotDnsName . "\\" output=file dst-path=\\"hotspot/products.json\\"")
   /system scheduler add name=refresh-products interval=1h start-time=startup on-event=$fetchCmd
 }
 
@@ -980,15 +994,12 @@ ROUTEROS_SCRIPT_TEMPLATE = """\
 :put ""
 :put "Public key:"
 :put $myPublicKey
-:put "--------------"
+:put ""
 :put "Tunnel IP:"
 :put $myTunnelIp
-:put "--------------"
-:put "Registration Token"
-:put $regToken
+:put ""
 :put "------------------------------------------------------------"
 """
-
  
 def render_setup_script(
     router_id: int,

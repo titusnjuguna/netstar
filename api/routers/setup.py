@@ -119,12 +119,14 @@ def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depend
 
 
 @router.get("/v1/get/client/routers/{client}", response_model=RoutersListResponse)
-def get_all_routers(client:int,db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+def get_all_routers(client:int,background_tasks: BackgroundTasks,db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     routers = db.query(RouterInfo).filter(RouterInfo.client_id == client)
     router_responses = []
     for r in routers:
         host = r.tunnel_ip or r.ip_address
-        stats = MikrotikOperation(router=r).get_router_live_stats()
+        mikrotik_op = MikrotikOperation(router=r)
+        stats = mikrotik_op.get_router_live_stats()
+        background_tasks.add_task(mikrotik_op.fetch_hotspot_details())
         router_responses.append(RouterOut(
             id=r.id,
             name=r.name or "",
@@ -285,7 +287,7 @@ def get_all_products(background_tasks: BackgroundTasks,
         query = query.filter(Products.router_id == router.id)
     products = query.all()
     mikrotik_op = MikrotikOperation(router=router)
-    background_tasks.add_task(mikrotik_op.fetch_hotspot_details)
+    background_tasks.add_task(mikrotik_op.fetch_hotspot_details())
     product_responses = [
         ProductOut(
             id=str(p.id),
@@ -520,7 +522,7 @@ def get_hotspot_details(host: str = Query(..., description="Router hostname to f
         "location": router.location,
         "contact": router.phone_number,
         "advert": "For more info, visit our website at https://wifi.hotspot.babybull.cc",
-        "Signature": "Powered by BabyBull Networks a Division Zenlow Ltd"
+        "Signature": "Powered by BabyBull Networks"
     }
 
 @router.get("/v1/get/products", response_model=ProductsListResponse)
