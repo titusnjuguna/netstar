@@ -33,6 +33,7 @@ _template_env = Environment(
 )
 class _Settings:
     WG_INTERFACE = os.environ.get("WG_INTERFACE", "wg0")
+    HUB_INTERFACE = os.environ.get("HUB_INTERFACE","wg-hub")
     HUB_PUBLIC_KEY = os.environ.get("HUB_PUBLIC_KEY", "")
     HUB_TUNNEL_IP = os.getenv("HUB_TUNNEL_IP","")
     HUB_ENDPOINT_HOST = os.environ.get("HUB_ENDPOINT_HOST", "")
