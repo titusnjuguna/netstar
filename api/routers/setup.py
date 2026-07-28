@@ -126,7 +126,7 @@ def get_all_routers(client:int,background_tasks: BackgroundTasks,db: Session = D
         host = r.tunnel_ip or r.ip_address
         mikrotik_op = MikrotikOperation(router=r)
         # stats = mikrotik_op.get_router_live_stats()
-        stats={"status":"Active","memoryUsage":"20%","cpuLoad":"10%","uptime":"5H","activeUsers":5}
+        stats={"status":"Active","memoryUsage":20,"cpuLoad":10,"uptime":"5H","activeUsers":5}
         background_tasks.add_task(mikrotik_op.fetch_hotspot_details())
         router_responses.append(RouterOut(
             id=r.id,
