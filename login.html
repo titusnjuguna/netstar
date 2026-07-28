@@ -939,7 +939,7 @@
 
   async function loadMore() {
     try {
-      const data = await fetch('/more.json').then(r => r.json());
+      const data = await fetch('more.json').then(r => r.json());
 
       const name     = data.hotspotName ?? '';
       const location = data.location    ?? 'Nairobi';

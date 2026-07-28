@@ -44,6 +44,7 @@ class RouterOut(BaseModel):
     ipAddress: str
     port: int
     username: str
+    location:str
     status: str
     cpuLoad: int
     memoryUsage: int

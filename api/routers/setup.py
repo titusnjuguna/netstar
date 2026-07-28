@@ -133,6 +133,7 @@ def get_all_routers(client:int,background_tasks: BackgroundTasks,db: Session = D
             name=r.name or "",
             ipAddress=r.ip_address,
             port=r.port or 8728,
+            location = r.location or "Xyz",
             username=r.user_name,
             status=stats["status"],
             cpuLoad=stats["cpuLoad"],
