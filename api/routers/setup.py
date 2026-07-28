@@ -389,6 +389,7 @@ def generate_mikrotik_setup_script(
         tunnel_ip=tunnel_ip,
         user_name=api_username,
         password=api_password,
+        location= req.location,
         reg_token=registration_token,
         till_number = req.till_number,
         hostname = hostname,
