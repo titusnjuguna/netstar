@@ -66,7 +66,7 @@ class MikrotikOperation:
                 host=self.host,
                 username=self.username,
                 password=self.password,
-                port=self.port,
+                # port=self.port,
                 plaintext_login=True
             )
             self.connection.set_timeout(5)
