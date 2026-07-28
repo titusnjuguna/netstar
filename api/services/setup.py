@@ -66,17 +66,19 @@ class MikrotikOperation:
                 host=self.host,
                 username=self.username,
                 password=self.password,
-                # port=self.port,
                 plaintext_login=True
             )
             self.connection.set_timeout(5)
             self.api = self.connection.get_api()
         except exceptions.RouterOsApiConnectionError:
-            raise HTTPException(status_code=503, detail="Router is offline or inaccessible.")
+            # raise HTTPException(status_code=503, detail="Router is offline or inaccessible.")
+            pass
         except exceptions.RouterOsApiCommunicationError as e:
-            raise HTTPException(status_code=500, detail=f"Communication error: {e}")
+            # raise HTTPException(status_code=500, detail=f"Communication error: {e}")
+            pass
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
+            # raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
+            pass
         
     def _parse_speed_mbps(self):
     
@@ -196,7 +198,7 @@ class MikrotikOperation:
             self.api.get_resource('/tool').call('fetch', arguments={
                 'url': f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
                 'output': 'file',
-                'dst-path': 'hotspot/products.json',
+                'dst-path': 'products.json',
             })
         except Exception as e:
             logger.warning("refresh_router_products skipped on %s: %s", self.host, e)
