@@ -128,7 +128,7 @@ class MikrotikOperation:
             print(f"An error occurred: {e}")
 
 
-    def format_uptime(uptime_str):
+    def format_uptime(self,uptime_str):
         if not uptime_str:
             return "0d 0h 0m"
         weeks = days = hours = minutes = 0
