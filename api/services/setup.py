@@ -1054,3 +1054,70 @@ def allocate_tunnel_ip(db: Session) -> str:
         detail="WireGuard tunnel pool exhausted (10.200.0.0/16 is full). "
         "Expand the pool before adding more routers.",
     )
+
+
+def delete_wireguard_record(ip_address: str) -> None:
+    bare_ip = ip_address.split("/")[0]
+    conf_path = f"/etc/wireguard/{settings.WG_INTERFACE}.conf"
+
+    # 1. Find the public key for this IP in the live interface
+    try:
+        result = subprocess.run(
+            ["wg", "show", settings.WG_INTERFACE, "allowed-ips"],
+            check=True, capture_output=True, text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise HTTPException(status_code=500, detail=f"wg show failed: {exc.stderr or exc}")
+
+    public_key = None
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and bare_ip in parts[1]:
+            public_key = parts[0]
+            break
+
+    if public_key is None:
+        logger.warning("No WireGuard peer found for IP %s — skipping live removal", bare_ip)
+    else:
+        # 2. Remove from the live kernel interface
+        try:
+            subprocess.run(
+                ["wg", "set", settings.WG_INTERFACE, "peer", public_key, "remove"],
+                check=True, capture_output=True, text=True,
+            )
+            logger.info("Removed WireGuard peer %s (%s) from live interface", public_key[:10], bare_ip)
+        except subprocess.CalledProcessError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to remove peer: {exc.stderr or exc}")
+
+    # 3. Remove the peer block from wg0.conf
+    try:
+        try:
+            with open(conf_path, "r") as f:
+                conf = f.read()
+        except FileNotFoundError:
+            return
+
+        parts = conf.split("\n[Peer]")
+        interface_section = parts[0]
+
+        def _peer_matches(block: str) -> bool:
+            if public_key and f"PublicKey = {public_key}" in block:
+                return True
+            if f"AllowedIPs = {bare_ip}/32" in block or f"AllowedIPs = {bare_ip}" in block:
+                return True
+            return False
+
+        remaining_peers = [p for p in parts[1:] if not _peer_matches(p)]
+
+        updated = interface_section.rstrip()
+        for peer in remaining_peers:
+            updated += "\n[Peer]" + peer
+        updated += "\n"
+
+        with open(conf_path, "w") as f:
+            f.write(updated)
+
+        logger.info("Removed peer %s from %s", bare_ip, conf_path)
+
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to update {conf_path}: {exc}")

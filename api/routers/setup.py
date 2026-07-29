@@ -594,10 +594,13 @@ def get_products_with_routers(
     )
 
 @router.delete("/v1/delete/router/{id}", response_model=MessageResponse)
-def delete_router(id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+def delete_router(id: int,background_task:BackgroundTasks ,db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     db_router = db.query(RouterInfo).filter(RouterInfo.id == id).first()
     if not db_router:
         raise HTTPException(status_code=404, detail="Router not found")
+    #add a delete job wireguard
+    ip_address = db_router.tunnel_ip or db_router.ip_address
+    background_task.add(delete_wireguard_record,ip_address)
     db.delete(db_router)
     db.commit()
     return MessageResponse(message="Router deleted successfully")
