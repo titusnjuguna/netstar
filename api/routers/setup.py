@@ -449,7 +449,7 @@ def get_router_ip_address(db: Session = Depends(get_db)):
 def set_up_wireguard_router_to_backend(req: WireGuardSet, _: dict = Depends(verify_token), db: Session = Depends(get_db)):
     apply_wireguard_peer(public_key=req.public_key, tunnel_ip=req.ip_address)
     #set public facing ip address
-    db_router = db.execute(select(RouterInfo).filter(RouterInfo.tunnel_ip == req.ip_address)).first()
+    db_router = db.query(RouterInfo).filter(RouterInfo.tunnel_ip == req.ip_address).first()
     if db_router:
         db_router.public_ip = req.public_ip
         db.commit()
