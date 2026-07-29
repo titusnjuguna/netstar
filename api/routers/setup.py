@@ -600,7 +600,7 @@ def delete_router(id: int,background_task:BackgroundTasks ,db: Session = Depends
         raise HTTPException(status_code=404, detail="Router not found")
     #add a delete job wireguard
     ip_address = db_router.tunnel_ip or db_router.ip_address
-    background_task.add(delete_wireguard_record,ip_address)
+    background_task.add_task(delete_wireguard_record,ip_address)
     db.delete(db_router)
     db.commit()
     return MessageResponse(message="Router deleted successfully")
