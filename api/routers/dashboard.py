@@ -39,7 +39,7 @@ def get_dashboard_summary(
         )
 
     total_revenue = (
-        _payments_for_client(db.query(func.sum(Subscription.amount)))
+        _payments_for_client(db.query(func.sum(Subscription.payment.amount)))
         .scalar()
     ) or 0
 
@@ -74,7 +74,7 @@ def get_dashboard_summary(
     ) or 0
 
     weekly_sales = (
-        _payments_for_client(db.query(func.sum(Subscription.amount)))
+        _payments_for_client(db.query(func.sum(Subscription.payment.amount)))
         .filter(cast(Subscription.payment_date, Date) >= today - timedelta(days=6))
         .scalar()
     ) or 0
