@@ -192,33 +192,59 @@ class MikrotikOperation:
     def match_product_to_profile(self):
         return self.get_profile_by_name()
 
-    def refresh_router_products(self):
-        self.__initiate_connection()
+    def _deploy_file(self, url: str, dst_path: str, ftp_content: str = None) -> bool:
+        """
+        Deploy a file to the router's hotspot folder.
+        Primary: router pulls via /tool/fetch (no FTP service needed).
+        Fallback: backend pushes via FTP (if /tool/fetch fails due to permissions/network).
+        """
+        # --- Primary: router pulls ---
         try:
+            self.__initiate_connection()
             self.api.get_resource('/tool').call('fetch', arguments={
-                'url': f"http://167.86.76.158:8070/api/v1/get/products?host={self.host_name}",
+                'url': url,
                 'output': 'file',
-                'dst-path': 'products.json',
+                'dst-path': dst_path,
             })
+            logger.info("Deployed %s to %s via /tool/fetch", dst_path, self.host)
+            return True
         except Exception as e:
-            logger.warning("refresh_router_products skipped on %s: %s", self.host, e)
+            logger.warning("/tool/fetch failed for %s on %s: %s — trying FTP push", dst_path, self.host, e)
         finally:
-            self.connection.disconnect()
-        return True
+            if self.connection:
+                self.connection.disconnect()
 
-    def fetch_hotspot_details(self):
-        self.__initiate_connection()
+        # --- Fallback: backend pushes via FTP ---
+        if ftp_content is None:
+            try:
+                import requests as _req
+                ftp_content = _req.get(url, timeout=5).text
+            except Exception as e:
+                logger.warning("Could not fetch content from %s for FTP fallback: %s", url, e)
+                return False
         try:
-            self.api.get_resource('/tool').call('fetch', arguments={
-                'url': f"http://167.86.76.158:8070/api/v1/get/hotspot-details?host={self.host_name}",
-                'output': 'file',
-                'dst-path': 'more.json',
-            })
+            ftp = ftplib.FTP()
+            ftp.connect(self.router.ip_address, 21, timeout=10)
+            ftp.login(self.username, self.password)
+            ftp.storbinary(f"STOR {dst_path}", BytesIO(ftp_content.encode()))
+            ftp.quit()
+            logger.info("Deployed %s to %s via FTP fallback", dst_path, self.router.ip_address)
+            return True
         except Exception as e:
-            logger.warning("fetch_hotspot_details skipped on %s: %s", self.host, e)
-        finally:
-            self.connection.disconnect()
-        return True
+            logger.warning("FTP fallback also failed for %s on %s: %s", dst_path, self.host, e)
+            return False
+
+    def refresh_router_products(self) -> bool:
+        return self._deploy_file(
+            url=f"{settings.Backend_BASE_URL}get/products?host={self.host_name}",
+            dst_path="hotspot/products.json",
+        )
+
+    def fetch_hotspot_details(self) -> bool:
+        return self._deploy_file(
+            url=f"{settings.Backend_BASE_URL}get/hotspot-details?host={self.host_name}",
+            dst_path="hotspot/more.json",
+        )
 
     def get_active_session(self, phone: str) -> dict:
         """Return MAC, IP, and hostname for a currently-connected hotspot user."""

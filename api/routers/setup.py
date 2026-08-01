@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from datetime import datetime,timezone
 from api.db import db
 from api.services.setup import _Settings
@@ -18,8 +19,8 @@ import math
 
 router=APIRouter(prefix="/api",tags=["Router and Other Setup"])
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LOGIN_HTML_PATH = os.path.join(PROJECT_ROOT, "login.html")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+LOGIN_HTML_PATH = PROJECT_ROOT / "login.html"
 
 
 @router.post("/v1/create/router")
@@ -127,7 +128,7 @@ def get_all_routers(client:int,background_tasks: BackgroundTasks,db: Session = D
         mikrotik_op = MikrotikOperation(router=r)
         # stats = mikrotik_op.get_router_live_stats()
         stats={"status":"Active","memoryUsage":20,"cpuLoad":10,"uptime":"5H","activeUsers":5}
-        background_tasks.add_task(mikrotik_op.fetch_hotspot_details())
+        background_tasks.add_task(mikrotik_op.fetch_hotspot_details)
         router_responses.append(RouterOut(
             id=r.id,
             name=r.name or "",
@@ -506,7 +507,7 @@ def launch_hotspot(router_id: int, db: Session = Depends(get_db), _: dict = Depe
         if "No route to host" in stderr or "Connection closed" in stderr or "Connection refused" in stderr:
             raise HTTPException(
                 status_code=503,
-                detail=f"Router at {host} is unreachable — WireGuard tunnel is not established yet. "
+                detail=f"Router at {host}-{LOGIN_HTML_PATH} is unreachable — WireGuard tunnel is not established yet. "
                        "Run the setup script on the MikroTik first and wait for it to connect back.",
             )
         raise HTTPException(status_code=502, detail=f"scp failed: {stderr.strip()}")
