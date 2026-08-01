@@ -28,9 +28,7 @@ def get_dashboard_summary(
     _: dict = Depends(verify_token),
 ):
     today = date.today()
-
-    # HotspotPayments filtered by client: join through Products → RouterInfo
-    def _payments_for_client(q):
+    def _hp_for_client(q):
         return (
             q.join(HotspotPayments, Subscription.payment_id == HotspotPayments.id)
             .join(Products, HotspotPayments.product_id == Products.id)
@@ -39,7 +37,7 @@ def get_dashboard_summary(
         )
 
     total_revenue = (
-        _payments_for_client(db.query(func.sum(Subscription.payment.amount)))
+        _hp_for_client(db.query(func.sum(Subscription.payment.amount)))
         .scalar()
     ) or 0
 
@@ -59,7 +57,7 @@ def get_dashboard_summary(
     )
 
     vouchers_sold = (
-        _payments_for_client(db.query(HotspotPayments))
+        _hp_for_client(db.query(HotspotPayments))
         .filter(
             extract("month", HotspotPayments.payment_date) == today.month,
             extract("year",  HotspotPayments.payment_date) == today.year,
@@ -68,14 +66,14 @@ def get_dashboard_summary(
     )
 
     today_sales = (
-        _payments_for_client(db.query(func.sum(Subscription.amount)))
-        .filter(cast(Subscription.payment_date, Date) == today)
+        _hp_for_client(db.query(func.sum(Subscription.payment.amount)))
+        .filter(cast(HotspotPayments.payment_date, Date) == today)
         .scalar()
     ) or 0
 
     weekly_sales = (
-        _payments_for_client(db.query(func.sum(Subscription.payment.amount)))
-        .filter(cast(Subscription.payment_date, Date) >= today - timedelta(days=6))
+        _hp_for_client(db.query(func.sum(Subscription.payment.amount)))
+        .filter(cast(HotspotPayments.payment_date, Date) >= today - timedelta(days=6))
         .scalar()
     ) or 0
 
