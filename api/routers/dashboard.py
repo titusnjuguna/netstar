@@ -78,6 +78,28 @@ def get_dashboard_summary(
         .scalar()
     ) or 0
 
+    # Per-day revenue and session count for the last 7 days
+    day_revenue_rows = (
+        _hp_for_client(
+            db.query(
+                cast(HotspotPayments.payment_date, Date).label("day"),
+                func.sum(HotspotPayments.amount).label("revenue"),
+                func.count(HotspotPayments.id).label("users"),
+            )
+        )
+        .filter(cast(HotspotPayments.payment_date, Date) >= today - timedelta(days=6))
+        .group_by(cast(HotspotPayments.payment_date, Date))
+        .all()
+    )
+    revenue_by_date = {row.day: (row.revenue or 0, row.users or 0) for row in day_revenue_rows}
+
+    DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    weekly_chart = []
+    for offset in range(6, -1, -1):
+        d = today - timedelta(days=offset)
+        rev, users = revenue_by_date.get(d, (0, 0))
+        weekly_chart.append(WeeklyChartEntry(day=DAY_LABELS[d.weekday()], revenue=rev, users=users, load=0))
+
     return DashboardSummaryResponse(
         message="Dashboard summary fetched successfully",
         metrics=DashboardMetrics(
@@ -89,10 +111,7 @@ def get_dashboard_summary(
             todaySales=today_sales,
             weeklySales=weekly_sales,
         ),
-        weeklyChart=[
-            WeeklyChartEntry(day=d, revenue=0, users=0, load=0)
-            for d in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        ],
+        weeklyChart=weekly_chart,
         liveEvents=[],
         todaysSales=TodaysSales(vouchersSold=vouchers_sold),
         sms=SmsStats(sent=0, failed=0, deliveryRate=0.0),
