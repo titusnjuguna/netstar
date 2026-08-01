@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, cast, Date
 from datetime import date, timedelta
 from api.db.session import get_db
-from api.models.payment import  Subscription,HotspotPayments
+from api.models.payment import Subscription, HotspotPayments
 from api.models.setup import RouterInfo, Products
 from api.services.auth import verify_token
 from api.schemas.dashboard import (
@@ -28,16 +28,17 @@ def get_dashboard_summary(
     _: dict = Depends(verify_token),
 ):
     today = date.today()
+
+    # HotspotPayments scoped to this client via Products → RouterInfo
     def _hp_for_client(q):
         return (
-            q.join(HotspotPayments, Subscription.payment_id == HotspotPayments.id)
-            .join(Products, HotspotPayments.product_id == Products.id)
+            q.join(Products, HotspotPayments.product_id == Products.id)
              .join(RouterInfo, Products.router_id == RouterInfo.id)
              .filter(RouterInfo.client_id == client)
         )
 
     total_revenue = (
-        _hp_for_client(db.query(func.sum(Subscription.payment.amount)))
+        _hp_for_client(db.query(func.sum(HotspotPayments.amount)))
         .scalar()
     ) or 0
 
@@ -60,19 +61,19 @@ def get_dashboard_summary(
         _hp_for_client(db.query(HotspotPayments))
         .filter(
             extract("month", HotspotPayments.payment_date) == today.month,
-            extract("year",  HotspotPayments.payment_date) == today.year,
+            extract("year", HotspotPayments.payment_date) == today.year,
         )
         .count()
     )
 
     today_sales = (
-        _hp_for_client(db.query(func.sum(Subscription.payment.amount)))
+        _hp_for_client(db.query(func.sum(HotspotPayments.amount)))
         .filter(cast(HotspotPayments.payment_date, Date) == today)
         .scalar()
     ) or 0
 
     weekly_sales = (
-        _hp_for_client(db.query(func.sum(Subscription.payment.amount)))
+        _hp_for_client(db.query(func.sum(HotspotPayments.amount)))
         .filter(cast(HotspotPayments.payment_date, Date) >= today - timedelta(days=6))
         .scalar()
     ) or 0
