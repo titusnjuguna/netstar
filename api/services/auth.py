@@ -16,3 +16,8 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(bearer_sche
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+def hash_password(password: str) -> str:
+    # Implement a proper hashing mechanism here, e.g., bcrypt
+
+    return password  

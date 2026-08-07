@@ -1,21 +1,26 @@
+import random
+import string
 from api.models.admin import Clients, ClientBilling
 from api.models.setup import RouterInfo
-from api.services.auth import verify_token
+from api.models.users import User
+from api.services.auth import hash_password, verify_token
+from api.services.sms import send_email
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from api.schemas.admin import *
 from api.schemas.setup import RouterOut
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends,BackgroundTasks, HTTPException
 from api.db.session import get_db
 from sqlalchemy.orm import Session
+from api.services.auth import hash_password
 
 router = APIRouter(
     prefix="/api/v1/admin",
     tags=["Admin"])
 
 @router.post("/create-client", response_model=ClientResponse)
-def create_client(client: ClientCreateRequest, db: Session = Depends(get_db)):#, _: dict = Depends(verify_token)):
+def create_client(client: ClientCreateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):#, _: dict = Depends(verify_token)):
     db_client = Clients(
         name=client.name,
         email=client.email,
@@ -24,7 +29,20 @@ def create_client(client: ClientCreateRequest, db: Session = Depends(get_db)):#,
     )
     db.add(db_client)
     db.commit()
-    db.refresh(db_client)
+    #create a user superadmin for the client with default password
+    generate_alphanumeric = lambda length: ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+    default_password = generate_alphanumeric(7)
+    message = f"Hello {client.name}, your account has been created. Your default password is: {default_password}. Please change it after logging in."
+    new_user = User(
+        username=client.email,
+        email=client.email,
+        hashed_password=hash_password(default_password),  # In a real app, hash the password
+        is_superadmin=True,
+        client_id=db_client.id
+    )
+    db.add(new_user)
+    db.commit()
+    background_tasks.add_task(send_email, db_client.email, message)
     return db_client
 
 
