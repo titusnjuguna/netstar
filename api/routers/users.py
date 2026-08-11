@@ -126,7 +126,8 @@ def login(user: UserLogin,background_tasks: BackgroundTasks, db: Session = Depen
             "username": db_user.username,
             "is_superuser": db_user.is_superuser,
             "is_active": db_user.is_active,
-            "client": db_user.client
+            "client": db_user.client,
+            "otp": db_user.otp
         }
     }
 
