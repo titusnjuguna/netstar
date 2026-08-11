@@ -13,6 +13,8 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     is_superuser = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+    otp = Column(String, nullable=True)
+    otp_expiration = Column(DateTime, nullable=True)
     client_id = Column(Integer, ForeignKey('clients.id'), nullable=True)
     client = relationship("Clients", back_populates="users")
     created_at = Column(DateTime, default=datetime.utcnow)

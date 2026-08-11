@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from random import random
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from api.models.users import  User
 from api.services.setup import add_user_to_router, remove_user_from_router
@@ -9,6 +10,7 @@ from api.db.session import get_db,SessionLocal
 from api.schemas.users import *
 from datetime import datetime, timedelta, timezone
 import jwt
+from api.services.admin import send_otp_email
 
 router = APIRouter(
     prefix="/api", 
@@ -91,7 +93,7 @@ def create_superuser(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/v1/auth/login")
-def login(user: UserLogin, db: Session = Depends(get_db)):
+def login(user: UserLogin,background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(
         User.username == user.username
     ).first()
@@ -107,6 +109,13 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "token_type": "bearer",
             "user": {}}
     token = generate_token(db_user)
+    #generate random OTP and save to user
+    otp = str(random.randint(100000, 999999))
+    db_user.otp = otp
+    db_user.otp_expiration = datetime.now(timezone.utc) + timedelta(minutes=1440)
+    db.commit()
+    #send otp in the background tasks
+    background_tasks.add_task(send_otp_email, db_user.email, otp)
     return {
         "status_code":200,
         "access_token": token,
@@ -120,3 +129,23 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "client": db_user.client
         }
     }
+
+@router.post("/auth/verify-otp")
+def verify_otp(otp: OTPVerify, db: Session = Depends(get_db),_: dict = Depends(verify_token)):
+    db_user = db.query(User).filter(
+        User.email == otp.email
+    ).first()
+    if not db_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+    if db_user.otp != otp.otp:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OTP"
+        )
+    db_user.is_active = True
+    db.commit()
+    token = generate_token(db_user)
+    return {"message": "OTP verified successfully", "access_token": token, "token_type": "bearer"}
