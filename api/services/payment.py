@@ -26,8 +26,8 @@ def mpesa_authentication(till_number,db):
     merchant = str(till_number)
     config = db.query(MpesaConfig).filter(MpesaConfig.paybill_number==merchant).first()
     if config:
-        consumer_key= config.consumer_key
-        consumer_secret= config.consumer_secret
+        consumer_key= os.getenv("MPESA_CONSUMER_KEY")
+        consumer_secret= os.getenv("MPESA_CONSUMER_SECRET")
         credentials = f"{consumer_key}:{consumer_secret}"
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
         url = os.getenv("MPESA_AUTH_URL")
