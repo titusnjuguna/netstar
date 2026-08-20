@@ -42,3 +42,10 @@ class ClientBillingResponse(BaseModel):
     has_paid: bool
     created_at: datetime
     updated_at: datetime
+
+
+class SuperAdminDashboardResponse(BaseModel):
+    total_clients: int
+    total_routers: int
+    total_users: int
+    paybill_balance: int

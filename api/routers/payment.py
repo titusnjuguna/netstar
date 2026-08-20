@@ -103,6 +103,7 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     checkout_id = stk.get("CheckoutRequestID")
     result_code = stk.get("ResultCode")
     result_desc = stk.get("ResultDesc", "")
+    paybill_balance = stk.get("PaybillBalance",0)
 
     print(f"M-Pesa callback: checkout={checkout_id} result_code={result_code} desc={result_desc}")
 
@@ -139,6 +140,7 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
 
     payment.transaction_ref = receipt
     payment.payment_date = datetime.utcnow()
+    payment.paybill_balance = paybill_balance
     db.commit()
     print(f"Payment confirmed: receipt={receipt} checkout={checkout_id}")
     return GeneralResponse(message="ok", success=True, code=200)
