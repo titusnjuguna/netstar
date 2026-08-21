@@ -38,7 +38,7 @@ def create_client(client: ClientCreateRequest, background_tasks: BackgroundTasks
         username=client.email,
         email=client.email,
         hashed_password=hash_password(default_password),  # In a real app, hash the password
-        is_superadmin=True,
+        is_superuser=True,
         client_id=db_client.id
     )
     db.add(new_user)
