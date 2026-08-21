@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 
 template = Jinja2Templates(directory=os.path.join("api", "templates"))
-
+#test fixing
 
 app = FastAPI()
 
