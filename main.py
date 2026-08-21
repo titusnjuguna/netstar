@@ -26,21 +26,17 @@ template = Jinja2Templates(directory=os.path.join("api", "templates"))
 app = FastAPI()
 
 async def connect_to_db():
-    conn = await asyncpg.connect(
-        database="netstat",  # Replace with your actual database name
-        user="postgres",
-        password="208251001Tito",
-        host="localhost",
-        port=5432
-    )
+    conn = await asyncpg.connect(os.environ["DATABASE_URL"].replace("+psycopg2", ""))
     return conn
 
 @app.get("/test")
 async def root():
-    async with await connect_to_db() as conn:
-        # Perform database operations here
+    conn = await connect_to_db()
+    try:
         result = await conn.fetchval("SELECT 1")
         return {"message": "Connected to database!", "result": result}
+    finally:
+        await conn.close()
 
 # Initialize database on startup
 @app.on_event("startup")
