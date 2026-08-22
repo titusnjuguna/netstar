@@ -131,7 +131,8 @@ def login(user: UserLogin,background_tasks: BackgroundTasks, db: Session = Depen
         }
     }
 
-@router.post("/auth/verify-otp")
+
+@router.post("/v1/auth/verify-otp")
 def verify_otp(otp: OTPVerify, db: Session = Depends(get_db),_: dict = Depends(verify_token)):
     db_user = db.query(User).filter(
         User.email == otp.email
