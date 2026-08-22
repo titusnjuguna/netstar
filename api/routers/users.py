@@ -1,4 +1,4 @@
-from random import random
+import random
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from api.models.users import  User
