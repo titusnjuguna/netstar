@@ -43,7 +43,8 @@ def create_client(client: ClientCreateRequest, background_tasks: BackgroundTasks
     )
     db.add(new_user)
     db.commit()
-    background_tasks.add_task(send_email, db_client.email, message)
+    # background_tasks.add_task(send_email, db_client.email, message)
+    print(f"Email sent to {db_client.email} with message: {message}:{default_password}")
     return db_client
 
 
