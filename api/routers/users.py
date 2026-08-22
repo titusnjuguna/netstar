@@ -115,7 +115,7 @@ def login(user: UserLogin,background_tasks: BackgroundTasks, db: Session = Depen
     db_user.otp_expiration = datetime.now(timezone.utc) + timedelta(minutes=1440)
     db.commit()
     #send otp in the background tasks
-    background_tasks.add_task(send_otp_email, db_user.email, otp)
+    # background_tasks.add_task(send_otp_email, db_user.email, otp)
     return {
         "status_code":200,
         "access_token": token,
@@ -150,4 +150,15 @@ def verify_otp(otp: OTPVerify, db: Session = Depends(get_db),_: dict = Depends(v
     db_user.is_active = True
     db.commit()
     token = generate_token(db_user)
-    return {"message": "OTP verified successfully", "access_token": token, "token_type": "bearer"}
+    return {"message": "OTP verified successfully", 
+            "access_token": token, 
+            "token_type": "bearer",
+            "user": {
+                "id": db_user.id,
+                "email": db_user.email,
+                "username": db_user.username,
+                "is_superuser": db_user.is_superuser,
+                "is_active": db_user.is_active,
+                "client": db_user.client
+            }
+    }
