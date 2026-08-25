@@ -60,10 +60,8 @@ def stk_push_request(amount,phone,till_number,product_id,db):
         "TransactionDesc": f"Payment for hotspot {phone}"
     }
     stk_push_url = os.getenv("STK_PUSH_URL")
-    print(f"STK push request payload: {payload}")
     response = requests.request("POST", stk_push_url, headers=headers, json=payload)
     if response.json().get("ResponseCode") == "0":
-        print(f"STK push request sent. Response: {response.text}")
         #add the payment record to the database
         CheckoutRequestID = response.json().get("CheckoutRequestID", "")
         new_payment = HotspotPayments(
@@ -81,8 +79,6 @@ def stk_push_request(amount,phone,till_number,product_id,db):
     else:
         print(f"Error occurred while making STK push request: {response.text}")
         return {"error": "Failed to initiate STK push request", "details": response.text, "status_code": response.status_code}
-
-# {"Success":"True","Code":200,"message":"Success","customer":"Tito","limit":"1000","balance":0,"access":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzM3MzYwMDgwLCJqdGkiOiJhNzQ5NTQ4MTU4Njg0N2VjYjE5ZmRlYzUzN2U5OWUzNyIsInVzZXJfaWQiOjF9.XsuRk7Vi17QZUpcxO4YPi_mifkywQ1-HZlHkUQgFDlE","refresh":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTczNzQzNTY4MCwianRpIjoiOWIyZGU3YmU5MDQ4NDJiOWE4ZWI3NzI4NTRjY2ZiMDMiLCJ1c2VyX2lkIjoxfQ.kuL_xQ0JYWi50b2UmKbLVPVJYb9VYNsDah07qa44nSs"}
 
 def send_payment_to_owner(router, amount, userID, phone, transaction_ref, db):
     # Get the payment configuration for the router
