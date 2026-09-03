@@ -249,22 +249,7 @@ def add_payment_config(payment:PaymentConfigRequest,db:Session = Depends(get_db)
         db.commit()
         return PaymentConfigResponse(message="Config Added Successfully",success=True,code=200)
 
-# @router.post('/order/{id}',response_model=GeneralResponse)
-# def subscribe_package(id:int,detail:PayRequest,db:Session = Depends(get_db)):
-#     phone = detail.phone
-#     try:
-#         product = db.query(Products).filter(Products.id==id).first()
-#         product_price = product.price
-#         router_id = product.router_id
-#         router = db.query(RouterInfo).filter(RouterInfo.id==router_id).first()
-#         till_number = router.till_number
-#         #intiate an stk push
-#         stk_push_request(amount=product_price,phone=phone,till_number=till_number,db=db)
-#         # print("Wait for stk")
-#         return GeneralResponse(message="Payment request sent",success=True,code=200)
-#     except:
-#         # print("Missing issue")
-#         return GeneralResponse(message="Error in payment request",success=False,code=400)
+
 @router.post('/order/{id}', response_model=GeneralResponse)
 def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     phone = detail.phone
@@ -300,36 +285,3 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
         import traceback
         print(traceback.format_exc())  # Print full stack trace
         return GeneralResponse(message=f"Error in payment request-{stk_response}", success=False, code=400)
-
-
-
-
-    # pass
-    # {    
-    # "Body": {        
-    #     "stkCallback": {            
-    #         "MerchantRequestID": "29115-34620561-1",            
-    #         "CheckoutRequestID": "ws_CO_191220191020363925",            
-    #         "ResultCode": 0,            
-    #         "ResultDesc": "The service request is processed successfully.",            
-    #         "CallbackMetadata": {                
-    #             "Item": [{                        
-    #             "Name": "Amount",                        
-    #             "Value": 1.00                    
-    #             },                    
-    #             {                        
-    #             "Name": "MpesaReceiptNumber",                        
-    #             "Value": "NLJ7RT61SV"                    
-    #             },                    
-    #             {                        
-    #             "Name": "TransactionDate",                        
-    #             "Value": 20191219102115                    
-    #             },                    
-    #             {                        
-    #             "Name": "PhoneNumber",                        
-    #             "Value": 254708374149                    
-    #             }]            
-    #         }        
-    #     }    
-    # }
-    # }

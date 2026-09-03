@@ -569,8 +569,8 @@
   </div>
 </div>
 
-<script>
-  const BASE_URL  = 'http://167.86.76.158:8070';
+<script> 
+  const BASE_URL  = 'https://api.net.babybull.cc';
   const HOST      = location.hostname;
   const API_URL   = BASE_URL + '/api/v1/get/products?host=' + HOST;
   let ROUTER_ID = '';
@@ -801,7 +801,8 @@
         requestBtn.disabled = false;
         requestBtn.textContent = 'Request payment';
       }
-    } catch {
+    } catch{
+      // console.error('Payment request failed:', error);
       statusEl.style.color = 'var(--signal)';
       statusEl.textContent = 'Network error. Check your connection and try again.';
       requestBtn.disabled = false;

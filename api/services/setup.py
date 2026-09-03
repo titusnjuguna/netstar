@@ -95,12 +95,21 @@ class MikrotikOperation:
         if not self.api:
             self.__initiate_connection()
         profile_name = self.product.name
+        duration = self.product.duration
         speed = self._parse_speed_mbps() or "2M/2M"
         try:
+            #check if profile already exists
+            existing_profiles = self.api.get_resource('/ip/hotspot/user/profile').get()
+            if any(p.get('name') == profile_name for p in existing_profiles):
+                logger.info("Profile '%s' already exists on %s", profile_name, self.host)
+                return
             self.api.get_resource('/ip/hotspot/user/profile').add(**{
                 'name': profile_name,
                 'rate-limit': speed,
                 'shared-users': '1',
+                'session-timeout': f'{int(duration)}m' if duration else '1h',
+                'idle-timeout': '5m',
+                'mac-cookie-timeout': '1h',
             })
             logger.info("Created hotspot profile '%s' (%s) on %s", profile_name, speed, self.host)
         except Exception as e:

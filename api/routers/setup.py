@@ -111,7 +111,6 @@ def hotspot_pay(router_id: int, payload: HotspotPayRequest, db: Session = Depend
         return GeneralResponse(message="Package not found", success=False, code=404)
     try:
         response = stk_push_request(amount=product.price, phone=payload.phone, till_number=db_router.till_number,product_id=product.id ,db=db)
-        print(f"STK push request response API Query: {response}")
         if response.get("status_code") != 200:
             return GeneralResponse(message=f"Error initiating payment: {response.get('details')}", success=False, code=response.get("status_code"))
         return GeneralResponse(message="Payment request sent.Check your phone.",payment_ref = response.get("payment_ref"), success=True, code=200)
@@ -218,8 +217,10 @@ def create_products(product: ProductCreate, background_tasks: BackgroundTasks, d
     db.commit()
     db.refresh(new_product)
     mikrotik_op = MikrotikOperation(router=router,product=new_product)
+    background_tasks.add_task(mikrotik_op.create_router_profile_product)
     background_tasks.add_task(mikrotik_op.match_product_to_profile)
     background_tasks.add_task(mikrotik_op.refresh_router_products)
+    
     return ProductDetailResponse(
         message="Product created successfully",
         name = new_product.router.hotspot_name if new_product.router else "Unknown",
