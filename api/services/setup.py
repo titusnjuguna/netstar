@@ -301,9 +301,13 @@ class MikrotikOperation:
             existing_user = users.get(name=self.phone)
             print(f"Existing user check for {self.phone}: {existing_user}")
             if existing_user:
-                users.remove(existing_user[0]['.id'])
+                user_id = existing_user[0]['id']
+                users.remove(id=user_id)
             users.add(**{'name': self.phone, 'password': self.hotspot_password,
                         'limit-uptime': limit_uptime, 'profile': profile_name})
+            
+        _add(profile_name)
+
         def _update():
             all_users = list(users.get())
             existing = next((u for u in all_users if u.get('name') == self.phone), None)
