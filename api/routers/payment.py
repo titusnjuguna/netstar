@@ -7,7 +7,7 @@ from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,Paym
 from api.models.payment import *
 from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
-from api.services.setup import create_hotspot_user,MikrotikOperation
+from api.services.setup import MikrotikOperation
 from api.services.auth import verify_token
 import json
 
