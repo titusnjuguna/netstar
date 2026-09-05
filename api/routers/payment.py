@@ -170,6 +170,7 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
         if product and router:
             hotspot_password = ref[-8:]
             uptime = int(product.duration)
+            router_name = router.name
 
             # Return existing credentials if subscription already created (idempotent poll)
             existing_sub = db.query(Subscription).filter(Subscription.payment_id == paymentID).first()
@@ -189,7 +190,7 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
             mkt.match_product_to_profile()
             try:
                 username, password = mkt.create_hotspot_user()
-                print(f"Hotspot user ready: {username} on router {router.name}")
+                print(f"Hotspot user ready: {username} on router {router_name}")
                 now = datetime.utcnow()
                 expire_date = now + timedelta(minutes=uptime)
                 sub = Subscription(

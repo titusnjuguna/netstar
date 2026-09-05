@@ -299,15 +299,12 @@ class MikrotikOperation:
         def _add(profile_name):
             #clear the user if they exist first before doing anything
             existing_user = users.get(name=self.phone)
-            print(f"Existing user check for {self.phone}: {existing_user}")
             if existing_user:
                 user_id = existing_user[0]['id']
                 users.remove(id=user_id)
             users.add(**{'name': self.phone, 'password': self.hotspot_password,
                         'limit-uptime': limit_uptime, 'profile': profile_name})
             
-        _add(profile_name)
-
         def _update():
             all_users = list(users.get())
             existing = next((u for u in all_users if u.get('name') == self.phone), None)
@@ -619,56 +616,55 @@ def get_router_connection(ROUTER_IP,ROUTER_USERNAME,ROUTER_PASSWORD):
     return connection.get_api()
 
 
+# def create_hotspot_user(router, phone, duration_minutes, profile_name, password):
+#     host = router.tunnel_ip or router.ip_address
+#     # api = MikrotikOperation()
+#     api = get_router_connection(host, router.user_name, router.password)
+#     users = api.get_resource('/ip/hotspot/user')
+#     limit_uptime = f"{duration_minutes}m"
 
-def create_hotspot_user(router, phone, duration_minutes, profile_name, password):
-    host = router.tunnel_ip or router.ip_address
-    # api = MikrotikOperation()
-    api = get_router_connection(host, router.user_name, router.password)
-    users = api.get_resource('/ip/hotspot/user')
-    limit_uptime = f"{duration_minutes}m"
+#     def _add(prof):
+#         users.add(**{'name': phone, 'password': password,
+#                      'limit-uptime': limit_uptime, 'profile': prof})
 
-    def _add(prof):
-        users.add(**{'name': phone, 'password': password,
-                     'limit-uptime': limit_uptime, 'profile': prof})
+#     def _update():
+#         # We know ≥1 user exists here so .get() won't return !empty
+#         all_users = list(users.get())
+#         existing = next((u for u in all_users if u.get('name') == phone), None)
+#         if not existing:
+#             raise RuntimeError(f"User '{phone}' not found for update on {host}")
+#         # Log the full dict so we can see the actual key name for the ID field
+#         logger.info("Existing user dict for %s: %s", phone, existing)
+#         dot_id = existing.get('.id') or existing.get('id')
+#         if dot_id is None:
+#             # Fallback: search for any key that looks like an ID
+#             dot_id = next((v for k, v in existing.items() if 'id' in k.lower()), None)
+#         if dot_id is None:
+#             raise RuntimeError(f"Cannot find .id for user '{phone}' — dict: {existing}")
+#         users.set(**{'.id': dot_id, 'password': password,
+#                      'limit-uptime': limit_uptime, 'profile': profile_name})
+#         logger.info("Hotspot user updated: %s on %s", phone, host)
 
-    def _update():
-        # We know ≥1 user exists here so .get() won't return !empty
-        all_users = list(users.get())
-        existing = next((u for u in all_users if u.get('name') == phone), None)
-        if not existing:
-            raise RuntimeError(f"User '{phone}' not found for update on {host}")
-        # Log the full dict so we can see the actual key name for the ID field
-        logger.info("Existing user dict for %s: %s", phone, existing)
-        dot_id = existing.get('.id') or existing.get('id')
-        if dot_id is None:
-            # Fallback: search for any key that looks like an ID
-            dot_id = next((v for k, v in existing.items() if 'id' in k.lower()), None)
-        if dot_id is None:
-            raise RuntimeError(f"Cannot find .id for user '{phone}' — dict: {existing}")
-        users.set(**{'.id': dot_id, 'password': password,
-                     'limit-uptime': limit_uptime, 'profile': profile_name})
-        logger.info("Hotspot user updated: %s on %s", phone, host)
-
-    try:
-        _add(profile_name)
-        logger.info("Hotspot user created: %s on %s", phone, host)
-    except Exception as add_err:
-        err_str = str(add_err).lower()
-        if 'already have user' in err_str:
-            _update()
-        elif 'does not match any value of profile' in err_str:
-            logger.warning("Profile '%s' not found on %s, falling back to default", profile_name, host)
-            try:
-                _add('default')
-                logger.info("Hotspot user created with default profile: %s on %s", phone, host)
-            except Exception as fallback_err:
-                if 'already have user' in str(fallback_err).lower():
-                    _update()
-                else:
-                    raise RuntimeError(f"Cannot create hotspot user '{phone}': {fallback_err}")
-        else:
-            raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
-    return phone, password
+#     try:
+#         _add(profile_name)
+#         logger.info("Hotspot user created: %s on %s", phone, host)
+#     except Exception as add_err:
+#         err_str = str(add_err).lower()
+#         if 'already have user' in err_str:
+#             _update()
+#         elif 'does not match any value of profile' in err_str:
+#             logger.warning("Profile '%s' not found on %s, falling back to default", profile_name, host)
+#             try:
+#                 _add('default')
+#                 logger.info("Hotspot user created with default profile: %s on %s", phone, host)
+#             except Exception as fallback_err:
+#                 if 'already have user' in str(fallback_err).lower():
+#                     _update()
+#                 else:
+#                     raise RuntimeError(f"Cannot create hotspot user '{phone}': {fallback_err}")
+#         else:
+#             raise RuntimeError(f"Cannot create hotspot user '{phone}': {add_err}")
+#     return phone, password
 
 def add_user_to_router(username, password, rate_limit):
     api = get_router_connection()
