@@ -271,6 +271,7 @@ class MikrotikOperation:
             'hostname': session.get('host-name', ''),
             'uptime': session.get('uptime', ''),
         }
+    
     def clear_expired_user_sessions(self):
         """Remove expired hotspot sessions from the router."""
         self.__initiate_connection()
@@ -297,8 +298,9 @@ class MikrotikOperation:
         
         def _add(profile_name):
             #clear the user if they exist first before doing anything
-            if users.get(name=self.phone):
-                users.remove(**{'name': self.phone})
+            existing_user = users.get(name=self.phone)
+            if existing_user:
+                users.remove(existing_user[0]['.id'])
             users.add(**{'name': self.phone, 'password': self.hotspot_password,
                         'limit-uptime': limit_uptime, 'profile': profile_name})
         def _update():
