@@ -1,5 +1,4 @@
 import os
-
 from dotenv import load_dotenv
 import requests
 from api.models.payment import HotspotPayments, PaymentConfig,PaymentDisbursement
@@ -7,7 +6,6 @@ from api.models.settings import MpesaConfig
 from api.schemas.payment import PaymentConfigRequest, PaymentConfigResponse, PayRequest
 from sqlalchemy.orm import Session
 from api.db.session import get_db
-from fastapi import Depends
 import base64
 from datetime import datetime
 import secrets

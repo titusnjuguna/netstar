@@ -271,18 +271,36 @@ class MikrotikOperation:
             'hostname': session.get('host-name', ''),
             'uptime': session.get('uptime', ''),
         }
+    def clear_expired_user_sessions(self):
+        """Remove expired hotspot sessions from the router."""
+        self.__initiate_connection()
+        try:
+            active = list(self.api.get_resource('/ip/hotspot/user').get())
+            for session in active:
+                if session.get('uptime') == '0s':
+                    self.api.get_resource('/ip/hotspot/user').remove(**{'.id': session['.id']})
+        finally:
+            self.connection.disconnect()
 
     def create_hotspot_user(self):
         self.__initiate_connection()
         users = self.api.get_resource('/ip/hotspot/user')
         limit_uptime = f"{self.uptime}m"
         profile_name = self.product.name
+        # Check whether the profile actually exists
+        profiles = self.api.get_resource('/ip/hotspot/user/profile')
+        profile = profiles.get(name=profile_name)
+        if not profile:
+            raise ValueError(
+                f"MikroTik Hotspot profile '{profile_name}' does not exist"
+            )
         
-
         def _add(profile_name):
+            #clear the user if they exist first before doing anything
+            if users.get(name=self.phone):
+                users.remove(**{'name': self.phone})
             users.add(**{'name': self.phone, 'password': self.hotspot_password,
                         'limit-uptime': limit_uptime, 'profile': profile_name})
-
         def _update():
             all_users = list(users.get())
             existing = next((u for u in all_users if u.get('name') == self.phone), None)

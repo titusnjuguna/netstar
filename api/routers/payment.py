@@ -169,7 +169,7 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
         router = db.query(RouterInfo).filter(RouterInfo.id == product.router_id).first() if product else None
         if product and router:
             hotspot_password = ref[-8:]
-            uptime = int(product.duration) * 60
+            uptime = int(product.duration)
 
             # Return existing credentials if subscription already created (idempotent poll)
             existing_sub = db.query(Subscription).filter(Subscription.payment_id == paymentID).first()

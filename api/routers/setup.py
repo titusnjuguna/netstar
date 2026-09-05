@@ -606,3 +606,6 @@ def delete_router(id: int,background_task:BackgroundTasks ,db: Session = Depends
     db.delete(db_router)
     db.commit()
     return MessageResponse(message="Router deleted successfully")
+
+
+
