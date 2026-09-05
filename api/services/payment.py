@@ -30,7 +30,6 @@ def mpesa_authentication(till_number,db):
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
         url = os.getenv("MPESA_AUTH_URL")
         response = requests.request("GET", url,headers = { 'Authorization': f'Basic {encoded_credentials}'})
-        print(f"MPESA Authentication response: {response.text}")
         return response.json().get("access_token")
     else:
         return None 
@@ -75,7 +74,6 @@ def stk_push_request(amount,phone,till_number,product_id,db):
         db.commit()
         return {"message": "STK push request sent successfully", "payment_ref": CheckoutRequestID,"details": response.text, "status_code": response.status_code}
     else:
-        print(f"Error occurred while making STK push request: {response.text}")
         return {"error": "Failed to initiate STK push request", "details": response.text, "status_code": response.status_code}
 
 def send_payment_to_owner(router, amount, userID, phone, transaction_ref, db):

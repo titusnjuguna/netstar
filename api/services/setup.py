@@ -299,6 +299,7 @@ class MikrotikOperation:
         def _add(profile_name):
             #clear the user if they exist first before doing anything
             existing_user = users.get(name=self.phone)
+            print(f"Existing user check for {self.phone}: {existing_user}")
             if existing_user:
                 users.remove(existing_user[0]['.id'])
             users.add(**{'name': self.phone, 'password': self.hotspot_password,
