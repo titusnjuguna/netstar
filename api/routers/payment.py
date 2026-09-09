@@ -281,7 +281,7 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
         return GeneralResponse(message=f"Error in payment request-{stk_response}", success=False, code=400)
 
 
-@router.post('/api/hotspot/connect/mpesa', response_model=GeneralResponse, tags=["payment"])
+@router.post('/v1/hotspot/connect/mpesa', response_model=GeneralResponse, tags=["payment"])
 def connect_hotspot_mpesa(request: PayRequest, db: Session = Depends(get_db)):
     phone = request.phone
     mpesa_ref = request.mpesa_ref
@@ -297,7 +297,7 @@ def connect_hotspot_mpesa(request: PayRequest, db: Session = Depends(get_db)):
                            success=True, code=200)
 
 
-@router.post('/api/hotspot/connect/voucher', response_model=GeneralResponse, tags=["Voucher payment"])
+@router.post('/v1/hotspot/connect/voucher', response_model=GeneralResponse, tags=["Voucher payment"])
 def connect_hotspot_voucher(request: PayRequest, db: Session = Depends(get_db)):
     phone = request.phone
     voucher_code = request.voucher_code
@@ -309,7 +309,7 @@ def connect_hotspot_voucher(request: PayRequest, db: Session = Depends(get_db)):
     return GeneralResponse(message="Payment request sent", success=True, code=200)
 
 
-@router.get('/api/generate/voucher/{client_id}', response_model=GeneralResponse, tags=["Voucher generation"])
+@router.get('/v1/generate/voucher/{client_id}', response_model=GeneralResponse, tags=["Voucher generation"])
 def generate_voucher(client_id: int, request: GenerateVoucherRequest, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     product_id = request.product_id
     phone = request.phone
@@ -332,20 +332,20 @@ def generate_voucher(client_id: int, request: GenerateVoucherRequest, db: Sessio
     db.commit()
     return GeneralResponse(message="Voucher generated successfully", success=True,code=200)
 
-@router.get('/api/get/vouchers/{client_id}', response_model=GeneralResponse, tags=["Voucher retrieval"])
+@router.get('/v1/get/vouchers/{client_id}', response_model=GeneralResponse, tags=["Voucher retrieval"])
 def get_vouchers(client_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     vouchers = db.query(VoucherPayment).filter(VoucherPayment.product.client_id == client_id).all()
     return GeneralResponse(message="Vouchers retrieved successfully", success=True, code=200, vouchers=vouchers)
 
 
-@router.get('/api/get/account-details/{client_id}', response_model=GeneralResponse, tags=["Account details"])
+@router.get('/v1/get/account-details/{client_id}', response_model=GeneralResponse, tags=["Account details"])
 def get_account_details(client_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     # Implement the logic to retrieve account details for the specified client.
     # This could involve querying the database for the client's information.
     # For now, we'll just return a success message.
     return GeneralResponse(message="Account details retrieved successfully", success=True, code=200)
 
-@router.post('/api/client/withdraw', response_model=GeneralResponse, tags=["Withdraw"])
+@router.post('/v1/client/withdraw', response_model=GeneralResponse, tags=["Withdraw"])
 def client_withdraw(request: PayRequest, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     phone = request.phone
     amount = request.amount
