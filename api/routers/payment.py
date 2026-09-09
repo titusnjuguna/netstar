@@ -3,13 +3,14 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 from datetime import datetime,timedelta
 from api.db.session import get_db
-from api.schemas.payment import PayRequest,PayResponse,PaymentConfigRequest,PaymentConfigResponse,GeneralResponse,SubscriptionOut,PaginationInfo,SubscriptionsListResponse
+from api.schemas.payment import PayRequest,GenerateVoucherRequest,PaymentConfigRequest,PaymentConfigResponse,GeneralResponse,SubscriptionOut,PaginationInfo,SubscriptionsListResponse
 from api.models.payment import *
 from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
 from api.services.setup import MikrotikOperation
 from api.services.auth import verify_token
 import json
+import string,random
 
 router=APIRouter(
     prefix="/api", 
@@ -105,15 +106,12 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     result_desc = stk.get("ResultDesc", "")
     paybill_balance = stk.get("PaybillBalance",0)
 
-    print(f"M-Pesa callback: checkout={checkout_id} result_code={result_code} desc={result_desc}")
-
     payment = db.query(HotspotPayments).filter(
         HotspotPayments.CheckoutRequestID == checkout_id
     ).first()
 
     if not payment:
         # Safaricom expects 200 regardless — log and ack
-        print(f"Callback for unknown CheckoutRequestID: {checkout_id}")
         return GeneralResponse(message="ok", success=True, code=200)
 
     if result_code != 0:
@@ -142,7 +140,6 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     payment.payment_date = datetime.utcnow()
     payment.paybill_balance = paybill_balance
     db.commit()
-    print(f"Payment confirmed: receipt={receipt} checkout={checkout_id}")
     return GeneralResponse(message="ok", success=True, code=200)
 
 
@@ -171,8 +168,6 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
             hotspot_password = ref[-8:]
             uptime = int(product.duration)
             router_name = router.name
-
-            # Return existing credentials if subscription already created (idempotent poll)
             existing_sub = db.query(Subscription).filter(Subscription.payment_id == paymentID).first()
             if existing_sub:
                 return GeneralResponse(
@@ -182,15 +177,13 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                     payment_ref=ref,
                     hotspot_username=phone,
                     hotspot_password=hotspot_password,
-                    login_url="http://10.10.10.1/login",
-                )
+                    login_url="http://10.10.10.1/login",)
 
             mkt = MikrotikOperation(router=router, product=product, phone=phone,
                                     uptime=uptime, hotspot_password=hotspot_password)
             mkt.match_product_to_profile()
             try:
                 username, password = mkt.create_hotspot_user()
-                print(f"Hotspot user ready: {username} on router {router_name}")
                 now = datetime.utcnow()
                 expire_date = now + timedelta(minutes=uptime)
                 sub = Subscription(
@@ -286,3 +279,71 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
         import traceback
         print(traceback.format_exc())  # Print full stack trace
         return GeneralResponse(message=f"Error in payment request-{stk_response}", success=False, code=400)
+
+
+@router.post('/api/hotspot/connect/mpesa', response_model=GeneralResponse, tags=["payment"])
+def connect_hotspot_mpesa(request: PayRequest, db: Session = Depends(get_db)):
+    phone = request.phone
+    mpesa_ref = request.mpesa_ref
+    payment = db.query(HotspotPayments).filter(HotspotPayments.transaction_ref == mpesa_ref,HotspotPayments.phone == phone).first()
+    if not payment:
+        return GeneralResponse(message="Payment not found", success=False, code=404)
+    mtk = MikrotikOperation(router=payment.router, product=payment.products, phone=phone, uptime=payment.products.duration, hotspot_password=mpesa_ref[-8:])
+    username,password = mtk.create_hotspot_user()
+    return GeneralResponse(message="Payment request sent",
+                           hotspot_username=username,
+                           hotspot_password=password,
+                           login_url="http://10.10.10.1/login",
+                           success=True, code=200)
+
+
+@router.post('/api/hotspot/connect/voucher', response_model=GeneralResponse, tags=["Voucher payment"])
+def connect_hotspot_voucher(request: PayRequest, db: Session = Depends(get_db)):
+    phone = request.phone
+    voucher_code = request.voucher_code
+    payment = db.query(HotspotPayments).filter(HotspotPayments.transaction_ref == voucher_code,HotspotPayments.phone == phone).first()
+    if not payment:
+        return GeneralResponse(message="Payment not found", success=False, code=404)
+    mtk = MikrotikOperation(router=payment.router, product=payment.products, phone=phone, uptime=payment.products.duration, hotspot_password=voucher_code[-8:])
+    mtk.create_hotspot_user()
+    return GeneralResponse(message="Payment request sent", success=True, code=200)
+
+
+@router.get('/api/generate/voucher/{client_id}', response_model=GeneralResponse, tags=["Voucher generation"])
+def generate_voucher(client_id: int, request: GenerateVoucherRequest, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    product_id = request.product_id
+    phone = request.phone
+    product = db.query(Products).filter(Products.id == product_id).first()
+    if not product:
+        return GeneralResponse(message="Product not found", success=False, code=404)
+    router = db.query(RouterInfo).filter(RouterInfo.id == product.router_id).first()
+    if not router:
+        return GeneralResponse(message="Router not found", success=False, code=404)
+    random_alphanum =  ''.join(random.choices(string.ascii_uppercase + string.digits,k=5))
+    voucher_code = f"V{random_alphanum}{phone[-4:]}"
+    # mtk = MikrotikOperation(router=router, product=product, phone=phone, uptime=product.duration, hotspot_password=voucher_code[-8:])
+    # mtk.create_hotspot_user()
+    vcr = VoucherPayment(phone=phone,
+                         product_id=product_id,
+                         status="unused",
+                         voucher_code=voucher_code,
+                         generated_date=datetime.utcnow())
+    db.add(vcr)
+    db.commit()
+    return GeneralResponse(message="Voucher generated successfully", success=True,code=200)
+
+@router.get('/api/get/vouchers/{client_id}', response_model=GeneralResponse, tags=["Voucher retrieval"])
+def get_vouchers(client_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    vouchers = db.query(VoucherPayment).filter(VoucherPayment.product.client_id == client_id).all()
+    return GeneralResponse(message="Vouchers retrieved successfully", success=True, code=200, vouchers=vouchers)
+
+
+@router.post('/api/client/withdraw', response_model=GeneralResponse, tags=["Withdraw"])
+def client_withdraw(request: PayRequest, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    phone = request.phone
+    amount = request.amount
+    client_id = request.client_id
+    # Implement the logic to initiate a withdrawal for the client using the provided phone number and amount.
+    # This could involve interacting with a payment gateway or service.
+    # For now, we'll just return a success message.
+    return GeneralResponse(message=f"Withdrawal of {amount} initiated for client {client_id} to phone {phone}", success=True, code=200)

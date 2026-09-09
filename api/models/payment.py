@@ -56,4 +56,16 @@ class PaymentConfig(Base):
     initiator_password = Column(String)
     merchant = Column(Integer)
     router_id = Column(Integer, ForeignKey('routers.id'))
+
+
+class VoucherPayment(Base):
+    __tablename__ = 'voucher_payments'
+    id = Column(Integer, primary_key=True, index=True)
+    voucher_code = Column(String)
+    phone = Column(String)
+    generated_date = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="unused")
+    product_id = Column(Integer, ForeignKey("products.id"))
+    products = relationship("Products", backref="voucher_payments")
+    created_at = Column(DateTime, default=datetime.utcnow)
  

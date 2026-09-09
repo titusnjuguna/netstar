@@ -69,3 +69,8 @@ class SubscriptionsListResponse(BaseModel):
     message: str
     subscriptions: List[SubscriptionOut]
     pagination: PaginationInfo
+
+
+class GenerateVoucherRequest(BaseModel):
+    product_id: int
+    phone: str
