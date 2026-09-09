@@ -338,6 +338,13 @@ def get_vouchers(client_id: int, db: Session = Depends(get_db), _: dict = Depend
     return GeneralResponse(message="Vouchers retrieved successfully", success=True, code=200, vouchers=vouchers)
 
 
+@router.get('/api/get/account-details/{client_id}', response_model=GeneralResponse, tags=["Account details"])
+def get_account_details(client_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    # Implement the logic to retrieve account details for the specified client.
+    # This could involve querying the database for the client's information.
+    # For now, we'll just return a success message.
+    return GeneralResponse(message="Account details retrieved successfully", success=True, code=200)
+
 @router.post('/api/client/withdraw', response_model=GeneralResponse, tags=["Withdraw"])
 def client_withdraw(request: PayRequest, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     phone = request.phone
