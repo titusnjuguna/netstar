@@ -265,13 +265,8 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
         print(f"Found router: {router}")
         if not router:
             return GeneralResponse(message="Router not found", success=False, code=404)
-            
-        till_number = router.till_number
-        print(f"Till number: {till_number}")
-        
-        stk_response = stk_push_request(amount=product_price, phone=phone,till_number=till_number,db=db)
-        print(f"STK Response: {stk_response}")
-        
+        till_number = router.till_number  
+        stk_response = stk_push_request(amount=product_price, phone=phone,till_number=till_number,db=db)       
         return GeneralResponse(message="Payment request sent", success=True, code=200)
         
     except Exception as e:
@@ -282,7 +277,7 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
 
 
 @router.post('/hotspot/connect/mpesa', response_model=GeneralResponse, tags=["payment"])
-def connect_hotspot_mpesa(request: PayRequest, db: Session = Depends(get_db)):
+def connect_hotspot_mpesa(request: MPayRequest, db: Session = Depends(get_db)):
     mpesa_ref = request.reference
     payment = db.query(HotspotPayments).filter(HotspotPayments.transaction_ref == mpesa_ref).first()
     if not payment:

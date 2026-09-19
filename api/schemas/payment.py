@@ -14,9 +14,14 @@ class UserResponse(BaseModel):
     email: str
     is_active: bool
 
-class PayRequest(BaseModel):
-    router_id : str
+class MPayRequest(BaseModel):
+    routerId : str
     reference : str
+
+class PayRequest(BaseModel):
+    phone:str
+    productId:str
+
 
 class PayResponse(BaseModel):
     pass
