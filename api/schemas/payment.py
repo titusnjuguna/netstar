@@ -16,6 +16,7 @@ class UserResponse(BaseModel):
 
 class PayRequest(BaseModel):
     phone : str
+    mpesa_ref: str
 
 class PayResponse(BaseModel):
     pass
