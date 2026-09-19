@@ -112,10 +112,13 @@ def login(user: UserLogin,background_tasks: BackgroundTasks, db: Session = Depen
     #generate random OTP and save to user
     otp = str(random.randint(100000, 999999))
     db_user.otp = otp
-    db_user.otp_expiration = datetime.now(timezone.utc) + timedelta(minutes=1440)
+    #check if otp has expired first
+    if db_user.otp_expiration < datetime.now(timezone.utc):
+        db_user.otp_expiration = datetime.now(timezone.utc) + timedelta(minutes=1440)
+        #send otp in the background tasks
+        background_tasks.add_task(send_otp_email, db_user.email,otp)
     db.commit()
-    #send otp in the background tasks
-    # background_tasks.add_task(send_otp_email, db_user.email, otp)
+   
     return {
         "status_code":200,
         "access_token": token,
@@ -126,8 +129,7 @@ def login(user: UserLogin,background_tasks: BackgroundTasks, db: Session = Depen
             "username": db_user.username,
             "is_superuser": db_user.is_superuser,
             "is_active": db_user.is_active,
-            "client": db_user.client,
-            "otp": db_user.otp
+            "client": db_user.client
         }
     }
 
