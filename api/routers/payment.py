@@ -283,9 +283,8 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
 
 @router.post('/v1/hotspot/connect/mpesa', response_model=GeneralResponse, tags=["payment"])
 def connect_hotspot_mpesa(request: PayRequest, db: Session = Depends(get_db)):
-    phone = request.phone
-    mpesa_ref = request.mpesa_ref
-    payment = db.query(HotspotPayments).filter(HotspotPayments.transaction_ref == mpesa_ref,HotspotPayments.phone == phone).first()
+    mpesa_ref = request.reference
+    payment = db.query(HotspotPayments).filter(HotspotPayments.transaction_ref == mpesa_ref).first()
     if not payment:
         return GeneralResponse(message="Payment not found", success=False, code=404)
     mtk = MikrotikOperation(router=payment.router, product=payment.products, phone=phone, uptime=payment.products.duration, hotspot_password=mpesa_ref[-8:])

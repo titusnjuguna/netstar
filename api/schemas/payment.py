@@ -15,8 +15,8 @@ class UserResponse(BaseModel):
     is_active: bool
 
 class PayRequest(BaseModel):
-    phone : str
-    mpesa_ref: str
+    router_id : str
+    reference : str
 
 class PayResponse(BaseModel):
     pass
