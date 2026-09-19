@@ -343,7 +343,7 @@ class MikrotikOperation:
                         raise RuntimeError(f"Cannot create hotspot user '{self.phone}': {fallback_err}")
             else:
                 raise RuntimeError(f"Cannot create hotspot user '{self.phone}': {add_err}")
-        return self.phone, self.password
+        return self.phone,self.password
 
 
 def render_captive_portal_html(hotspot_name, router_id, till_number, api_base_url=API_BASE_URL):
