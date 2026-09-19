@@ -178,7 +178,6 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                     hotspot_username=phone,
                     hotspot_password=hotspot_password,
                     login_url="http://10.10.10.1/login",)
-
             mkt = MikrotikOperation(router=router, product=product, phone=phone,
                                     uptime=uptime, hotspot_password=hotspot_password)
             mkt.match_product_to_profile()
@@ -203,15 +202,12 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                     payment_ref=ref,
                     hotspot_username=username,
                     hotspot_password=password,
-                    login_url="http://10.10.10.1/login",
-                )
+                    login_url="http://10.10.10.1/login",)
             except Exception as e:
                 import traceback
                 print(f"Failed to create hotspot user: {e}\n{traceback.format_exc()}")
                 return GeneralResponse(message=f"Payment confirmed but router setup failed: {e}", success=False, code=500)
-
         return GeneralResponse(message="Payment successful", success=True, code=200)
-
     return GeneralResponse(message="Payment pending", success=False, code=202)
     
 
@@ -283,7 +279,7 @@ def connect_hotspot_mpesa(request: MPayRequest, db: Session = Depends(get_db)):
     if not payment:
         return GeneralResponse(message="Payment not found", success=False, code=404)
     router = payment.products.router
-    mtk = MikrotikOperation(router=router, product=payment.products, phone=payment.phone, uptime=payment.products.duration, hotspot_password=mpesa_ref[-8:])
+    mtk = MikrotikOperation(router=router,product=payment.products, phone=payment.phone, uptime=payment.products.duration, hotspot_password=mpesa_ref[-8:])
     username,password = mtk.create_hotspot_user()
     return GeneralResponse(message="Payment request sent",
                            hotspot_username=username,

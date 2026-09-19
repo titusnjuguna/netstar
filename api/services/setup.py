@@ -298,9 +298,11 @@ class MikrotikOperation:
         
         def _add(profile_name):
             #clear the user if they exist first before doing anything
+            limit_uptime=f"{self.uptime}m"
             existing_user = users.get(name=self.phone)
             if existing_user:
                 #check if all time has been consumed i.e if the user has no remaining time, then remove them and add them again else create anew user with remaining time and removethe old one
+                limit_uptime='0s'
                 user_id = existing_user[0]['id']
                 limit_uptime_x = existing_user[0].get('limit-uptime', '0s')
                 if limit_uptime_x == '0s':
