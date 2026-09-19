@@ -1,5 +1,5 @@
 from .sms import send_email
-from db.email import SendEmailService
+from api.db.email import SendEmailService
 
 def send_client_credentials(email, phone_number, password):
     # Implementation for sending client credentials
