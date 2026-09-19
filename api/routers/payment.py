@@ -287,7 +287,8 @@ def connect_hotspot_mpesa(request: PayRequest, db: Session = Depends(get_db)):
     payment = db.query(HotspotPayments).filter(HotspotPayments.transaction_ref == mpesa_ref).first()
     if not payment:
         return GeneralResponse(message="Payment not found", success=False, code=404)
-    mtk = MikrotikOperation(router=payment.router, product=payment.products, phone=phone, uptime=payment.products.duration, hotspot_password=mpesa_ref[-8:])
+    router = payment.products.router
+    mtk = MikrotikOperation(router=router, product=payment.products, phone=payment.phone, uptime=payment.products.duration, hotspot_password=mpesa_ref[-8:])
     username,password = mtk.create_hotspot_user()
     return GeneralResponse(message="Payment request sent",
                            hotspot_username=username,
