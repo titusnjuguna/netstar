@@ -281,7 +281,7 @@ def subscribe_package(id: int, detail: PayRequest, db: Session = Depends(get_db)
         return GeneralResponse(message=f"Error in payment request-{stk_response}", success=False, code=400)
 
 
-@router.post('/v1/hotspot/connect/mpesa', response_model=GeneralResponse, tags=["payment"])
+@router.post('/hotspot/connect/mpesa', response_model=GeneralResponse, tags=["payment"])
 def connect_hotspot_mpesa(request: PayRequest, db: Session = Depends(get_db)):
     mpesa_ref = request.reference
     payment = db.query(HotspotPayments).filter(HotspotPayments.transaction_ref == mpesa_ref).first()
