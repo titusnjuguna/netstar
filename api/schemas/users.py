@@ -16,7 +16,7 @@ class UserResponse(BaseModel):
     username: str
     email: str
     is_active: bool
-    client : int
+    client_id : int
 
 class OTPVerify(BaseModel):
     otp: str
