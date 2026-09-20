@@ -69,6 +69,10 @@ class RouterPingResponse(BaseModel):
     uptime: str
     activeUsers: int
 
+class RoutersPingResponse(BaseModel):
+    message: str
+    statistics: List
+
 class HotspotPayRequest(BaseModel):
     phone: str
     productId: str

@@ -176,6 +176,29 @@ def ping_router(id: int, db: Session = Depends(get_db), _: dict = Depends(verify
         activeUsers=stats["activeUsers"],
     )
 
+@router.get("/ping/routers",response_model=RoutersPingResponse)
+def ping_routers(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    db_routers = db.query(RouterInfo).all()
+    statistics = []
+    for db_router in db_routers:
+        if not db_router:
+            raise HTTPException(status_code=404, detail="Router not found")
+        stats = MikrotikOperation(router=db_router).get_router_live_stats()
+        message = "Router is online" if stats["status"] == "online" else "Router is unreachable"
+        statistics.append({
+            "router":db_router,
+            "status":stats["status"],
+            "cpuLoad": stats["cpuLoad"],
+            "memoryUsage": stats["memoryUsage"],
+            "uptime": stats["uptime"],
+            "activeUsers": stats["activeUsers"],
+        })
+    return RoutersPingResponse(
+            message=message,
+            statistics =statistics
+            )
+
+
 @router.get("/online/device/{id}")
 def check_get_device_resource(id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     router = db.query(RouterInfo).filter(RouterInfo.id == id).first()

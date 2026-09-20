@@ -25,10 +25,8 @@ router = APIRouter(
 def get_dashboard_summary(
     client: int,
     db: Session = Depends(get_db),
-    _: dict = Depends(verify_token),
-):
+    _: dict = Depends(verify_token),):
     today = date.today()
-
     # HotspotPayments scoped to this client via Products → RouterInfo
     def _hp_for_client(q):
         return (
@@ -50,12 +48,10 @@ def get_dashboard_summary(
         .filter(Subscription.is_active.is_(True), RouterInfo.client_id == client)
         .count()
     )
-
     total_routers = (
         db.query(RouterInfo)
         .filter(RouterInfo.client_id == client)
-        .count()
-    )
+        .count())
 
     vouchers_sold = (
         _hp_for_client(db.query(HotspotPayments))
