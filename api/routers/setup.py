@@ -183,10 +183,14 @@ def ping_routers(db: Session = Depends(get_db), _: dict = Depends(verify_token))
     for db_router in db_routers:
         if not db_router:
             raise HTTPException(status_code=404, detail="Router not found")
-        stats = MikrotikOperation(router=db_router).get_router_live_stats()
-        message = "Router is online" if stats["status"] == "online" else "Router is unreachable"
+        try:
+            stats = MikrotikOperation(router=db_router).get_router_live_stats()
+            message = "Router is online" if stats["status"] == "online" else "Router is unreachable"
+        except:
+            pass
         statistics.append({
-            "router":db_router,
+            "router":db_router.id,
+            "router_ip": db_router.ipAddress,
             "status":stats["status"],
             "cpuLoad": stats["cpuLoad"],
             "memoryUsage": stats["memoryUsage"],
