@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from api.models.users import  User
 from api.services.setup import add_user_to_router, remove_user_from_router
 from api.services.auth import verify_token, SECRET_KEY, ALGORITHM
-from pydantic import BaseModel
 from typing import List
 from api.db.session import get_db,SessionLocal
 from api.schemas.users import *
@@ -36,6 +35,12 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     users = db.query(User).offset(skip).limit(limit).all()
     return users
+
+@router.get("/v1/get/client/users/{client_id}",response_model=List[UserResponse])
+def get_client_users(client_id:int,skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
+    users = db.query(User).filter(User.client_id==client_id).offset(skip).limit(limit).all()
+    return users
+
 
 @router.delete("/delete/user/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
