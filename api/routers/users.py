@@ -113,12 +113,16 @@ def login(user: UserLogin,background_tasks: BackgroundTasks, db: Session = Depen
     otp = str(random.randint(100000, 999999))
     db_user.otp = otp
     #check if otp has expired first
-    if db_user.otp_expiration < datetime.now(timezone.utc):
-        db_user.otp_expiration = datetime.now(timezone.utc) + timedelta(minutes=1440)
+    otp_expiration = db_user.otp_expiration
+    if otp_expiration.tzinfo is None:
+        otp_expiration = otp_expiration.replace(tzinfo=timezone.utc)
+    if otp_expiration < datetime.now(timezone.utc):
+        otp_expiration = datetime.now(timezone.utc) + timedelta(minutes=1440)
         #send otp in the background tasks
         background_tasks.add_task(send_otp_email, db_user.email,otp)
-    db.commit()
-   
+        db_user.otp_expiration = otp_expiration
+        db.commit()
+        db.refresh(db_user)
     return {
         "status_code":200,
         "access_token": token,
