@@ -176,7 +176,7 @@ def ping_router(id: int, db: Session = Depends(get_db), _: dict = Depends(verify
         activeUsers=stats["activeUsers"],
     )
 
-@router.get("/ping/routers",response_model=RoutersPingResponse)
+@router.get("/v1/ping/routers",response_model=RoutersPingResponse)
 def ping_routers(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     db_routers = db.query(RouterInfo).all()
     statistics = []
