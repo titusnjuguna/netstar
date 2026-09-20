@@ -190,7 +190,7 @@ def ping_routers(db: Session = Depends(get_db), _: dict = Depends(verify_token))
             pass
         statistics.append({
             "router":db_router.id,
-            "router_ip": db_router.ipAddress,
+            "router_ip": db_router.ip_address,
             "status":stats["status"],
             "cpuLoad": stats["cpuLoad"],
             "memoryUsage": stats["memoryUsage"],
