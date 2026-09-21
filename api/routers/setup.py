@@ -124,9 +124,12 @@ def get_all_routers(client:int,background_tasks: BackgroundTasks,db: Session = D
     router_responses = []
     for r in routers:
         host = r.tunnel_ip or r.ip_address
-        mikrotik_op = MikrotikOperation(router=r)
-        # stats = mikrotik_op.get_router_live_stats()
-        stats={"status":"Active","memoryUsage":20,"cpuLoad":10,"uptime":"5H","activeUsers":5}
+        try:
+            mikrotik_op = MikrotikOperation(router=r)
+            stats = mikrotik_op.get_router_live_stats()
+            stats={"status":stats["status"],"memoryUsage":stats["memoryUsage"],"cpuLoad":stats["cpuLoad"],"uptime":stats["uptime"],"activeUsers":stats["activeUsers"]}
+        except:
+            stats={"status":"offline","memoryUsage":0,"cpuLoad":0,"uptime":0,"activeUsers":0}
         background_tasks.add_task(mikrotik_op.fetch_hotspot_details)
         router_responses.append(RouterOut(
             id=r.id,
