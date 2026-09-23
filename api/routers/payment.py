@@ -290,17 +290,22 @@ def connect_hotspot_mpesa(request: MPayRequest, db: Session = Depends(get_db)):
 
 @router.post('/v1/hotspot/connect/voucher', response_model=GeneralResponse, tags=["Voucher payment"])
 def connect_hotspot_voucher(request: PayRequest, db: Session = Depends(get_db)):
-    phone = request.phone
     voucher_code = request.voucher_code
-    payment = db.query(HotspotPayments).filter(HotspotPayments.transaction_ref == voucher_code,HotspotPayments.phone == phone).first()
+    payment = db.query(VoucherPayment).filter(VoucherPayment.voucher_code==voucher_code,VoucherPayment.status=="unused").first()
+    phone = payment.phone
     if not payment:
-        return GeneralResponse(message="Payment not found", success=False, code=404)
-    mtk = MikrotikOperation(router=payment.router, product=payment.products, phone=phone, uptime=payment.products.duration, hotspot_password=voucher_code[-8:])
-    mtk.create_hotspot_user()
-    return GeneralResponse(message="Payment request sent", success=True, code=200)
+        return GeneralResponse(message="Voucher already redeemed", success=False, code=404)
+    product = db.query(Products).filter(Products.id==payment.product_id).first()
+    mtk = MikrotikOperation(router=product.router, product=product, phone=phone, uptime=product.duration, hotspot_password=voucher_code[-8:])
+    username,password = mtk.create_hotspot_user()
+    return GeneralResponse(message="Payment request sent",
+                               hotspot_username=username,
+                               hotspot_password=password,
+                               login_url="http://10.10.10.1/login",
+                               success=True, code=200)
 
 
-@router.get('/v1/generate/voucher/{client_id}', response_model=GeneralResponse, tags=["Voucher generation"])
+@router.post('/v1/generate/voucher/{client_id}', response_model=GeneralResponse, tags=["Voucher generation"])
 def generate_voucher(client_id: int, request: GenerateVoucherRequest, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     product_id = request.product_id
     phone = request.phone
@@ -312,7 +317,7 @@ def generate_voucher(client_id: int, request: GenerateVoucherRequest, db: Sessio
         return GeneralResponse(message="Router not found", success=False, code=404)
     random_alphanum =  ''.join(random.choices(string.ascii_uppercase + string.digits,k=5))
     voucher_code = f"V{random_alphanum}{phone[-4:]}"
-    # mtk = MikrotikOperation(router=router, product=product, phone=phone, uptime=product.duration, hotspot_password=voucher_code[-8:])
+    # mtk = MikrotikOperation(router=router, product=product, phone=phone, uptime=product.duration,hotspot_password=voucher_code)
     # mtk.create_hotspot_user()
     vcr = VoucherPayment(phone=phone,
                          product_id=product_id,
