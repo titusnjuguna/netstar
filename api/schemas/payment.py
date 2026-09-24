@@ -18,6 +18,9 @@ class MPayRequest(BaseModel):
     routerId : str
     reference : str
 
+class VoucherRequest(BaseModel):
+    voucher_code: str
+
 class PayRequest(BaseModel):
     phone:str
     productId:str
