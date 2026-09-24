@@ -330,7 +330,12 @@ def generate_voucher(client_id: int, request: GenerateVoucherRequest, db: Sessio
 
 @router.get('/v1/get/vouchers/{client_id}', response_model=GeneralResponse, tags=["Voucher retrieval"])
 def get_vouchers(client_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
-    vouchers = db.query(VoucherPayment).filter(VoucherPayment.products.router.client_id == client_id).all()
+    vouchers = (
+    db.query(VoucherPayment)
+    .join(VoucherPayment.products)
+    .join(Products.router)
+    .filter(RouterInfo.client_id == client_id)
+    .all())
     return GeneralResponse(message="Vouchers retrieved successfully", success=True, code=200, vouchers=vouchers)
 
 
