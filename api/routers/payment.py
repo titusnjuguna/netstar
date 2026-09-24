@@ -18,7 +18,7 @@ router=APIRouter(
 )
 
 
-@router.get('/v1/get/subscriptions/{client_id}', response_model=SubscriptionsListResponse, tags=["payment"])
+@router.get('/v1/get/subscriptions/{client_id}/', response_model=SubscriptionsListResponse, tags=["payment"])
 def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     per_page = 20
     base_query = (
@@ -26,7 +26,7 @@ def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = 
         .join(HotspotPayments, Subscription.payment_id == HotspotPayments.id)
         .join(Products, HotspotPayments.product_id == Products.id)
         .join(RouterInfo, Products.router_id == RouterInfo.id)
-        .filter(Subscription.is_active == True, RouterInfo.client_id == client_id)
+        .filter(RouterInfo.client_id == client_id)
     )
     total_items = base_query.count()
     total_pages = max((total_items + per_page - 1) // per_page, 1)
