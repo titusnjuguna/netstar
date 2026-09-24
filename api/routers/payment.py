@@ -298,6 +298,8 @@ def connect_hotspot_voucher(request:VoucherRequest, db: Session = Depends(get_db
     product = db.query(Products).filter(Products.id==payment.product_id).first()
     mtk = MikrotikOperation(router=product.router, product=product, phone=phone, uptime=product.duration, hotspot_password=voucher_code)
     username,password = mtk.create_hotspot_user()
+    payment.status="used"
+    db.commit()
     return GeneralResponse(message="Payment request sent",
                                hotspot_username=username,
                                hotspot_password=password,
