@@ -288,7 +288,7 @@ def connect_hotspot_mpesa(request: MPayRequest, db: Session = Depends(get_db)):
                            success=True, code=200)
 
 
-@router.post('/v1/hotspot/connect/voucher', response_model=GeneralResponse, tags=["Voucher payment"])
+@router.post('/hotspot/connect/voucher', response_model=GeneralResponse, tags=["Voucher payment"])
 def connect_hotspot_voucher(request: PayRequest, db: Session = Depends(get_db)):
     voucher_code = request.voucher_code
     payment = db.query(VoucherPayment).filter(VoucherPayment.voucher_code==voucher_code,VoucherPayment.status=="unused").first()
