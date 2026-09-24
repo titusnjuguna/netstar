@@ -80,3 +80,21 @@ class SubscriptionsListResponse(BaseModel):
 class GenerateVoucherRequest(BaseModel):
     product_id: int
     phone: str
+
+class GetVouchersResponse(BaseModel):
+    id: int
+    voucher_code: str
+    phone: str
+    generated_date: datetime
+    status: str
+    product_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class GetVouchersGeneralResponse(BaseModel):
+    message: str
+    success: bool
+    code: int
+    vouchers: List[GetVouchersResponse]

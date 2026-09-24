@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 from datetime import datetime,timedelta
 from api.db.session import get_db
-from api.schemas.payment import MPayRequest,PayRequest,GenerateVoucherRequest,PaymentConfigRequest,PaymentConfigResponse,GeneralResponse,SubscriptionOut,PaginationInfo,SubscriptionsListResponse
+from api.schemas.payment import GetVouchersGeneralResponse,GetVouchersResponse,MPayRequest,PayRequest,GenerateVoucherRequest,PaymentConfigRequest,PaymentConfigResponse,GeneralResponse,SubscriptionOut,PaginationInfo,SubscriptionsListResponse
 from api.models.payment import *
 from api.models.setup import Products,RouterInfo
 from api.services.payment import stk_push_request
@@ -328,15 +328,10 @@ def generate_voucher(client_id: int, request: GenerateVoucherRequest, db: Sessio
     db.commit()
     return GeneralResponse(message="Voucher generated successfully", success=True,code=200)
 
-@router.get('/v1/get/vouchers/{client_id}', response_model=GeneralResponse, tags=["Voucher retrieval"])
+@router.get('/v1/get/vouchers/{client_id}', response_model=GetVouchersGeneralResponse, tags=["Voucher retrieval"])
 def get_vouchers(client_id: int, db: Session = Depends(get_db), _: dict = Depends(verify_token)):
-    vouchers = (
-    db.query(VoucherPayment)
-    .join(VoucherPayment.products)
-    .join(Products.router)
-    .filter(RouterInfo.client_id == client_id)
-    .all())
-    return GeneralResponse(message="Vouchers retrieved successfully", success=True, code=200, vouchers=vouchers)
+    vouchers = db.query(VoucherPayment).join(VoucherPayment.products).join(Products.router).filter(RouterInfo.client_id == client_id).all()
+    return GetVouchersGeneralResponse(message="Vouchers retrieved successfully", success=True, code=200, vouchers=vouchers)
 
 
 @router.get('/v1/get/account-details/{client_id}', response_model=GeneralResponse, tags=["Account details"])
