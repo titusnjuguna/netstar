@@ -18,7 +18,7 @@ router=APIRouter(
 )
 
 
-@router.get('/v1/get/subscriptions/{client_id}/', response_model=SubscriptionsListResponse, tags=["payment"])
+@router.get('/v1/get/subscriptions/{client_id}', response_model=SubscriptionsListResponse, tags=["payment"])
 def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     per_page = 20
     base_query = (
@@ -296,7 +296,7 @@ def connect_hotspot_voucher(request:VoucherRequest, db: Session = Depends(get_db
     if not payment:
         return GeneralResponse(message="Voucher already redeemed", success=False, code=404)
     product = db.query(Products).filter(Products.id==payment.product_id).first()
-    mtk = MikrotikOperation(router=product.router, product=product, phone=phone, uptime=product.duration, hotspot_password=voucher_code[-8:])
+    mtk = MikrotikOperation(router=product.router, product=product, phone=phone, uptime=product.duration, hotspot_password=voucher_code)
     username,password = mtk.create_hotspot_user()
     return GeneralResponse(message="Payment request sent",
                                hotspot_username=username,
