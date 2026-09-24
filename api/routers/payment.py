@@ -292,10 +292,11 @@ def connect_hotspot_mpesa(request: MPayRequest, db: Session = Depends(get_db)):
 def connect_hotspot_voucher(request:VoucherRequest, db: Session = Depends(get_db)):
     voucher_code = request.voucher
     payment = db.query(VoucherPayment).filter(VoucherPayment.voucher_code==voucher_code,VoucherPayment.status=="unused").first()
-    phone = payment.phone
+    
     if not payment:
         return GeneralResponse(message="Voucher already redeemed", success=False, code=404)
     product = db.query(Products).filter(Products.id==payment.product_id).first()
+    phone = payment.phone
     mtk = MikrotikOperation(router=product.router, product=product, phone=phone, uptime=product.duration, hotspot_password=voucher_code)
     username,password = mtk.create_hotspot_user()
     payment.status="used"
