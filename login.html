@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Get Online</title>
+<title>wifi at 10 — Get Online</title>
 <style>
   :root{
     --ink: #1C2620;
@@ -468,6 +468,7 @@
 </head>
 <body>
 
+<!-- Hidden admin login — revealed by 5 rapid taps on the wordmark -->
 <div class="admin-panel" id="adminPanel" aria-hidden="true">
   <div class="admin-inner">
     <form id="adminForm">
@@ -505,7 +506,7 @@
       </button>
       <button class="reconnect-btn" id="mpesaBtn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor"/></svg>
-        Use M-Pesa Code
+        Use M-Pesa Reference
       </button>
     </div>
   </div>
@@ -569,8 +570,8 @@
   </div>
 </div>
 
-<script> 
-  const BASE_URL  = 'https://api.net.babybull.cc';
+<script>
+  const BASE_URL  = 'http://167.86.76.158:8070';
   const HOST      = location.hostname;
   const API_URL   = BASE_URL + '/api/v1/get/products?host=' + HOST;
   let ROUTER_ID = '';
@@ -645,7 +646,7 @@
 
   async function loadProducts() {
     try {
-      const products = await fetch('/products.json').then(r => r.json());
+      const products = await fetch('/hotspot/products.json').then(r => r.json());
 
       if (!Array.isArray(products)) {
         applyMeta(products);
@@ -710,7 +711,7 @@
 
   const params        = new URLSearchParams(location.search);
   const DST           = params.get('dst') || '/';
-  let   LINK_LOGIN    = params.get('link-login-only') || params.get('link-login') || '/login'|| ;
+  let   LINK_LOGIN    = params.get('link-login-only') || params.get('link-login') || '/login';
   const MAC           = params.get('mac') || '';
   const IP_PARAM      = params.get('ip')  || '';
 
@@ -738,7 +739,7 @@
         const status = (data.status ?? '').toLowerCase();
         const code = data.code ?? data.statusCode ?? '';
 
-        if (status === 'success' || status === 'completed' || status === 'paid' || code === 200) {
+        if (status === 'success' || status === 'completed' || status === 'paid' ||code === 200) {
           clearInterval(timer);
           statusEl.style.color = 'var(--money)';
           statusEl.textContent = 'Payment confirmed! Connecting you…';
@@ -801,8 +802,7 @@
         requestBtn.disabled = false;
         requestBtn.textContent = 'Request payment';
       }
-    } catch{
-      // console.error('Payment request failed:', error);
+    } catch {
       statusEl.style.color = 'var(--signal)';
       statusEl.textContent = 'Network error. Check your connection and try again.';
       requestBtn.disabled = false;
@@ -856,7 +856,6 @@
       if (res.ok) {
         setModalState(btn, status, data.message ?? 'Connected! Redirecting…', false, false);
         status.style.color = 'var(--money)';
-        
         setTimeout(() => mikrotikLogin(data.hotspot_username ?? voucher, data.hotspot_password ?? voucher), 1200);
       } else {
         setModalState(btn, status, data.message ?? 'Invalid voucher. Try again.', true, false);
@@ -941,7 +940,7 @@
 
   async function loadMore() {
     try {
-      const data = await fetch('more.json').then(r => r.json());
+      const data = await fetch('/more.json').then(r => r.json());
 
       const name     = data.hotspotName ?? '';
       const location = data.location    ?? 'Nairobi';
