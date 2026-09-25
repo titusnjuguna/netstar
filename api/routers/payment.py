@@ -182,7 +182,7 @@ def check_payment_status(reference: str, db: Session = Depends(get_db)):
                                     uptime=uptime, hotspot_password=hotspot_password)
             mkt.match_product_to_profile()
             try:
-                username, password = mkt.create_hotspot_user()
+                username,password = mkt.create_hotspot_user()
                 now = datetime.utcnow()
                 expire_date = now + timedelta(minutes=uptime)
                 sub = Subscription(
@@ -301,6 +301,7 @@ def connect_hotspot_voucher(request:VoucherRequest, db: Session = Depends(get_db
     username,password = mtk.create_hotspot_user()
     payment.status="used"
     db.commit()
+    print(f'{username}-{password}')
     return GeneralResponse(message="Payment request sent",
                                hotspot_username=username,
                                hotspot_password=password,

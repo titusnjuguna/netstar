@@ -560,7 +560,7 @@ def get_hotspot_details(host: str = Query(..., description="Router hostname to f
         "Signature": "Powered by BabyBull Networks"
     }
 
-@router.get("/v1/get/products", response_model=ProductsListResponse)
+@router.get("/get/products", response_model=ProductsListResponse)
 def get_products_by_router(host: str = Query(..., description="Router hostname to filter products"), db: Session = Depends(get_db)):
     router = db.query(RouterInfo).filter(RouterInfo.hostname == host.lower()).first()
     if not router:

@@ -710,7 +710,7 @@
 
   const params        = new URLSearchParams(location.search);
   const DST           = params.get('dst') || '/';
-  let   LINK_LOGIN    = params.get('link-login-only') || params.get('link-login') || '/login';
+  let   LINK_LOGIN    = params.get('link-login-only') || params.get('link-login') || '/login'|| ;
   const MAC           = params.get('mac') || '';
   const IP_PARAM      = params.get('ip')  || '';
 
@@ -738,7 +738,7 @@
         const status = (data.status ?? '').toLowerCase();
         const code = data.code ?? data.statusCode ?? '';
 
-        if (status === 'success' || status === 'completed' || status === 'paid' ||code === 200) {
+        if (status === 'success' || status === 'completed' || status === 'paid' || code === 200) {
           clearInterval(timer);
           statusEl.style.color = 'var(--money)';
           statusEl.textContent = 'Payment confirmed! Connecting you…';
@@ -856,7 +856,8 @@
       if (res.ok) {
         setModalState(btn, status, data.message ?? 'Connected! Redirecting…', false, false);
         status.style.color = 'var(--money)';
-        setTimeout(() => mikrotikLogin(data.username ?? voucher, data.password ?? voucher), 1200);
+        
+        setTimeout(() => mikrotikLogin(data.hotspot_username ?? voucher, data.hotspot_password ?? voucher), 1200);
       } else {
         setModalState(btn, status, data.message ?? 'Invalid voucher. Try again.', true, false);
       }
