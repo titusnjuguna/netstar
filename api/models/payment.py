@@ -10,19 +10,19 @@ class Subscription(Base):
     id = Column(Integer, primary_key=True) # index=True)
     device_identity = Column(String)  
     phone = Column(String) 
-    start_date = Column(DateTime,default=datetime.utcnow)
+    start_date = Column(DateTime,default=datetime.now())
     end_date = Column(DateTime)
     is_active = Column(Boolean, default=True)
     payment_id = Column(Integer, ForeignKey("hotspot_payments.id"), nullable=True)
     payment = relationship("HotspotPayments", back_populates="subscription")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now())
 
 class PaymentDisbursement(Base):
     __tablename__ = "payments"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     amount = Column(Float)
-    payment_date = Column(DateTime, default=datetime.utcnow)
+    payment_date = Column(DateTime, default=datetime.now())
     phone = Column(String)
     transaction_ref = Column(String)
     conversation_id = Column(String)
@@ -34,7 +34,7 @@ class HotspotPayments(Base):
     __tablename__ = "hotspot_payments"
     id = Column(Integer, primary_key=True, index=True)
     amount = Column(Float)
-    payment_date = Column(DateTime, default=datetime.utcnow)
+    payment_date = Column(DateTime, default=datetime.now())
     phone = Column(String)
     transaction_ref = Column(String)
     product_id = Column(Integer, ForeignKey("products.id"))
@@ -43,7 +43,7 @@ class HotspotPayments(Base):
     products = relationship("Products",backref="hotspot_payments")
     paybill_balance = Column(Float, default=0.0)
     subscription = relationship("Subscription", back_populates="payment") 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now())
 
 class PaymentConfig(Base):
     __tablename__ = 'payment_configs'
@@ -63,9 +63,9 @@ class VoucherPayment(Base):
     id = Column(Integer, primary_key=True, index=True)
     voucher_code = Column(String)
     phone = Column(String)
-    generated_date = Column(DateTime, default=datetime.utcnow)
+    generated_date = Column(DateTime, default=datetime.now())
     status = Column(String, default="unused")
     product_id = Column(Integer, ForeignKey("products.id"))
     products = relationship("Products", backref="voucher_payments")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now())
  

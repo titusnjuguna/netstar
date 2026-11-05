@@ -1,18 +1,26 @@
 
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 class UserCreate(BaseModel):
     username: str
     email: str
     password: str
+    is_superuser: Optional[bool] = False
+    is_active: Optional[bool] = True
+    client: Optional[int] = None
+    client_id: Optional[int] = None
 
 class UserResponse(BaseModel):
     id: int
     username: str
     email: str
     is_active: bool
+    is_superuser: Optional[bool] = False
+    client_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 class MPayRequest(BaseModel):
     routerId : str
@@ -23,8 +31,43 @@ class VoucherRequest(BaseModel):
     routerId : int
 
 class PayRequest(BaseModel):
-    phone:str
-    productId:str
+    phone: str
+    productId: Optional[str] = None
+    amount: Optional[float] = None
+    client_id: Optional[int] = None
+    clientId: Optional[int] = None
+
+class ClientWithdrawRequest(BaseModel):
+    amount: float
+    client_id: Optional[int] = None
+    clientId: Optional[int] = None
+    phone: Optional[str] = None
+    otp: Optional[str] = None
+
+class WithdrawOtpRequest(BaseModel):
+    amount: float
+    client_id: Optional[int] = None
+    clientId: Optional[int] = None
+
+class AccountDetailsResponse(BaseModel):
+    message: str = "Account details retrieved successfully"
+    success: bool = True
+    code: int = 200
+    currency: str = "KES"
+    balance: float = 0.0
+    pendingBalance: float = 0.0
+    pending_balance: float = 0.0
+    available_balance: float = 0.0
+    total_revenue: float = 0.0
+    total_withdrawn: float = 0.0
+    total_routers: int = 0
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PayResponse(BaseModel):
@@ -53,6 +96,8 @@ class GeneralResponse(BaseModel):
     hotspot_username: Optional[str] = None
     hotspot_password: Optional[str] = None
     login_url: Optional[str] = None
+    otp_required: Optional[bool] = None
+    phone: Optional[str] = None
 
 
 class SubscriptionOut(BaseModel):
@@ -102,3 +147,23 @@ class GetVouchersGeneralResponse(BaseModel):
     success: bool
     code: int
     vouchers: List[GetVouchersResponse]
+
+class TransactionItem(BaseModel):
+    id: str
+    date: datetime
+    type: str  # 'credit' | 'debit'
+    description: str
+    routerId: Optional[str] = None
+    routerName: Optional[str] = None
+    amount: float
+    balanceAfter: float
+    status: str  # 'completed' | 'pending' | 'failed'
+
+    model_config = ConfigDict(from_attributes=True)
+
+class WalletTransactionsResponse(BaseModel):
+    message: str = "Transactions retrieved successfully"
+    success: bool = True
+    code: int = 200
+    transactions: List[TransactionItem] = []
+    pagination: PaginationInfo

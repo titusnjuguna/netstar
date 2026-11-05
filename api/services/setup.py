@@ -66,8 +66,7 @@ class MikrotikOperation:
                 host=self.host,
                 username=self.username,
                 password=self.password,
-                plaintext_login=True
-            )
+                plaintext_login=True)
             self.connection.set_timeout(5)
             self.api = self.connection.get_api()
         except exceptions.RouterOsApiConnectionError:
