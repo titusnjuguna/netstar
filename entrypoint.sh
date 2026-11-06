@@ -6,6 +6,7 @@ set -e
 # running migrations and let SQLAlchemy own the schema on a fresh DB.
 python3 - <<'PYEOF'
 from api.db.session import engine, Base
+import api.models.admin
 import api.models.setup
 import api.models.payment
 import api.models.users

@@ -22,6 +22,7 @@ from api.models.payment import *
 from api.models.setup import Products, RouterInfo
 from api.models.admin import Clients
 from api.models.users import User
+from api.schemas.admin import SuperAdminDashboardResponse
 from api.services.payment import stk_push_request
 from api.services.setup import MikrotikOperation
 from api.services.auth import verify_token
@@ -85,24 +86,58 @@ def get_subscriptions(client_id: int, page: int = Query(1, ge=1), db: Session = 
     )
 
 @router.post('/v1/b2c/callback', response_model=GeneralResponse, tags=["payment"])
-def b2c_callback(request: Request, db: Session = Depends(get_db)):
+@router.post('/b2c/callback', response_model=GeneralResponse, tags=["payment"])
+async def b2c_callback(request: Request, db: Session = Depends(get_db)):
     try:
-        json_data = request.json()
+        json_data = await request.json()
     except Exception:
-        raw = request.body()
+        raw = await request.body()
         json_data = json.loads(raw.decode('utf-8'))
     print(f"B2C Callback received: {json_data}")
-    conversation_id = json_data.get("Result", {}).get("OriginatorConversationID")
-    result_code = json_data.get("Result", {}).get("ResultCode")
+    result_dict = json_data.get("Result", {})
+    conversation_id = result_dict.get("OriginatorConversationID") or result_dict.get("ConversationID")
+    result_code = result_dict.get("ResultCode")
+
     payment = db.query(PaymentDisbursement).filter(
         PaymentDisbursement.conversation_id == conversation_id
     ).first()
+    if not payment and result_dict.get("ConversationID"):
+        payment = db.query(PaymentDisbursement).filter(
+            PaymentDisbursement.conversation_id == result_dict.get("ConversationID")
+        ).first()
+
+    # Extract bulk balance from B2C ResultParameters or root
+    result_params = {}
+    for item in result_dict.get("ResultParameters", {}).get("ResultParameter", []):
+        key = item.get("Key")
+        val = item.get("Value")
+        if key:
+            result_params[key] = val
+
+    raw_bulk = (
+        result_params.get("B2CWorkingAccountAvailableFunds")
+        or result_params.get("B2CUtilityAccountAvailableFunds")
+        or result_params.get("BulkBalance")
+        or result_params.get("bulk_balance")
+        or result_dict.get("BulkBalance")
+        or result_dict.get("bulk_balance")
+        or json_data.get("BulkBalance")
+        or json_data.get("bulk_balance")
+        or 0.0
+    )
+    try:
+        bulk_balance = float(raw_bulk)
+    except (ValueError, TypeError):
+        bulk_balance = 0.0
+
     if not payment:
         print(f"Callback for unknown ConversationID: {conversation_id}")
         return GeneralResponse(message=f"Callback for unknown ConversationID: {conversation_id}", success=True, code=200)
+
     payment.success = True if result_code == 0 else False
-    payment.transaction_ref = json_data.get("Result", {}).get("TransactionID", "")
+    payment.transaction_ref = result_dict.get("TransactionID", "") or payment.transaction_ref
     payment.payment_date = datetime.now()
+    payment.bulk_balance = bulk_balance
     db.commit()
     return GeneralResponse(message="B2C callback received", success=True, code=200)
 
@@ -142,6 +177,21 @@ async def payment_callback_url(request: Request, db: Session = Depends(get_db)):
     }
     receipt = str(items.get("MpesaReceiptNumber", ""))
     paid_amount = items.get("Amount")
+
+    raw_pb = (
+        stk.get("PaybillBalance")
+        or stk.get("paybill_balance")
+        or json_data.get("PaybillBalance")
+        or json_data.get("paybill_balance")
+        or json_data.get("OrgAccountBalance")
+        or items.get("Balance")
+        or items.get("PaybillBalance")
+        or 0.0
+    )
+    try:
+        paybill_balance = float(raw_pb)
+    except (ValueError, TypeError):
+        paybill_balance = 0.0
 
     # Fraud check: paid amount must be >= expected amount
     if paid_amount is not None and float(paid_amount) < float(payment.amount):
@@ -396,6 +446,40 @@ def get_account_details(client_id: int, db: Session = Depends(get_db), _: dict =
 
     available_balance = max(0.0, float(total_revenue) - float(total_withdrawn) - float(pending_withdrawn))
 
+    last_hp = None
+    if product_ids:
+        last_hp = (
+            db.query(HotspotPayments)
+            .filter(HotspotPayments.product_id.in_(product_ids), HotspotPayments.paybill_balance.isnot(None), HotspotPayments.paybill_balance > 0)
+            .order_by(HotspotPayments.id.desc())
+            .first()
+        )
+    if not last_hp:
+        last_hp = (
+            db.query(HotspotPayments)
+            .filter(HotspotPayments.paybill_balance.isnot(None), HotspotPayments.paybill_balance > 0)
+            .order_by(HotspotPayments.id.desc())
+            .first()
+        )
+    paybill_balance = float(last_hp.paybill_balance) if last_hp else 0.0
+
+    last_pd = None
+    if user_ids:
+        last_pd = (
+            db.query(PaymentDisbursement)
+            .filter(PaymentDisbursement.user_id.in_(user_ids), PaymentDisbursement.bulk_balance.isnot(None), PaymentDisbursement.bulk_balance > 0)
+            .order_by(PaymentDisbursement.id.desc())
+            .first()
+        )
+    if not last_pd:
+        last_pd = (
+            db.query(PaymentDisbursement)
+            .filter(PaymentDisbursement.bulk_balance.isnot(None), PaymentDisbursement.bulk_balance > 0)
+            .order_by(PaymentDisbursement.id.desc())
+            .first()
+        )
+    bulk_balance = float(last_pd.bulk_balance) if last_pd else 0.0
+
     data_dict = {
         "client_id": client.id,
         "client_name": client.name,
@@ -409,6 +493,10 @@ def get_account_details(client_id: int, db: Session = Depends(get_db), _: dict =
         "total_revenue": round(float(total_revenue), 2),
         "total_withdrawn": round(float(total_withdrawn), 2),
         "total_routers": total_routers,
+        "paybill_balance": round(paybill_balance, 2),
+        "paybillBalance": round(paybill_balance, 2),
+        "bulk_balance": round(bulk_balance, 2),
+        "bulkBalance": round(bulk_balance, 2),
     }
 
     return AccountDetailsResponse(
@@ -423,6 +511,10 @@ def get_account_details(client_id: int, db: Session = Depends(get_db), _: dict =
         total_revenue=round(float(total_revenue), 2),
         total_withdrawn=round(float(total_withdrawn), 2),
         total_routers=total_routers,
+        paybill_balance=round(paybill_balance, 2),
+        paybillBalance=round(paybill_balance, 2),
+        bulk_balance=round(bulk_balance, 2),
+        bulkBalance=round(bulk_balance, 2),
         client_id=client.id,
         client_name=client.name,
         email=client.email,
@@ -755,3 +847,10 @@ def get_wallet_transactions(
             totalPages=total_pages
         )
     )
+
+
+@router.get('/get/superadmin/dashboard', response_model=SuperAdminDashboardResponse, tags=["Admin"])
+@router.get('/v1/get/superadmin/dashboard', response_model=SuperAdminDashboardResponse, tags=["Admin"])
+def get_superadmin_dashboard_alias(db: Session = Depends(get_db), token: dict = Depends(verify_token)):
+    from api.routers.admin import get_superadmin_dashboard
+    return get_superadmin_dashboard(db=db, _=token)

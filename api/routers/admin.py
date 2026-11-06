@@ -3,7 +3,7 @@ import string
 from api.models.admin import Clients, ClientBilling
 from api.models.setup import RouterInfo
 from api.models.users import User
-from api.models.payment import HotspotPayments
+from api.models.payment import HotspotPayments, PaymentDisbursement
 from api.services.auth import hash_password, verify_token
 from api.services.sms import send_email
 from typing import List, Optional
@@ -123,19 +123,43 @@ def get_all_routers(db: Session = Depends(get_db), _: dict = Depends(verify_toke
 
 
 @router.get("/get/superadmin/dashboard", response_model=SuperAdminDashboardResponse)
+@router.get("/superadmin/dashboard", response_model=SuperAdminDashboardResponse)
 def get_superadmin_dashboard(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     total_clients = db.query(Clients).count()
     total_routers = db.query(RouterInfo).count()
     total_users = db.query(User).count()
-    paybill_balance = db.query(HotspotPayments).filter(HotspotPayments.has_been_transferred == False).last().paybill_balance if db.query(HotspotPayments).filter(HotspotPayments.has_been_transferred == False).last() else 0.0
-    #monthly revenue collected from hotspot payments
+    
+    last_hp = (
+        db.query(HotspotPayments)
+        .filter(HotspotPayments.paybill_balance.isnot(None), HotspotPayments.paybill_balance > 0)
+        .order_by(HotspotPayments.id.desc())
+        .first()
+    )
+    paybill_balance = float(last_hp.paybill_balance) if last_hp else 0.0
+
+    last_pd = (
+        db.query(PaymentDisbursement)
+        .filter(PaymentDisbursement.bulk_balance.isnot(None), PaymentDisbursement.bulk_balance > 0)
+        .order_by(PaymentDisbursement.id.desc())
+        .first()
+    )
+    bulk_balance = float(last_pd.bulk_balance) if last_pd else 0.0
+
+    # monthly revenue collected from hotspot payments
     monthly_data = []
+    current_year = datetime.now().year
     for month in range(1, 13):
+        start_date = datetime(current_year, month, 1)
+        if month == 12:
+            end_date = datetime(current_year + 1, 1, 1)
+        else:
+            end_date = datetime(current_year, month + 1, 1)
+
         monthly_revenue = db.query(HotspotPayments).filter(
-            HotspotPayments.payment_date >= datetime(datetime.now().year, month, 1),
-            HotspotPayments.payment_date < datetime(datetime.now().year, month + 1, 1)
+            HotspotPayments.payment_date >= start_date,
+            HotspotPayments.payment_date < end_date
         ).with_entities(func.sum(HotspotPayments.amount)).scalar() or 0.0
-        month_words = datetime(datetime.now().year, month, 1).strftime('%B')
+        month_words = start_date.strftime('%B')
         monthly_data.append({month_words: monthly_revenue})
         
     return SuperAdminDashboardResponse(
@@ -143,5 +167,8 @@ def get_superadmin_dashboard(db: Session = Depends(get_db), _: dict = Depends(ve
         total_routers=total_routers,
         total_users=total_users,
         paybill_balance=paybill_balance,
+        bulk_balance=bulk_balance,
+        paybillBalance=paybill_balance,
+        bulkBalance=bulk_balance,
         monthly_revenue=monthly_data
     )

@@ -48,4 +48,8 @@ class SuperAdminDashboardResponse(BaseModel):
     total_clients: int
     total_routers: int
     total_users: int
-    paybill_balance: int
+    paybill_balance: float = 0.0
+    bulk_balance: float = 0.0
+    paybillBalance: Optional[float] = 0.0
+    bulkBalance: Optional[float] = 0.0
+    monthly_revenue: Optional[List[dict]] = None

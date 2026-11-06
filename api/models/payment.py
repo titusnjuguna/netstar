@@ -27,6 +27,7 @@ class PaymentDisbursement(Base):
     transaction_ref = Column(String)
     conversation_id = Column(String)
     success = Column(Boolean, default=False)
+    bulk_balance = Column(Float, default=0.0)
     user = relationship("User",backref="payments")
    
 

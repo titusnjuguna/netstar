@@ -9,6 +9,12 @@ class DashboardMetrics(BaseModel):
     onlineRouters: int
     totalRouters: int
     throughputMbps: float
+    todaySales: float = 0.0
+    weeklySales: float = 0.0
+    paybillBalance: float = 0.0
+    bulkBalance: float = 0.0
+    paybill_balance: float = 0.0
+    bulk_balance: float = 0.0
 
 
 class WeeklyChartEntry(BaseModel):

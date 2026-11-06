@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, cast, Date
 from datetime import date, timedelta
 from api.db.session import get_db
-from api.models.payment import Subscription, HotspotPayments
+from api.models.payment import Subscription, HotspotPayments, PaymentDisbursement
 from api.models.setup import RouterInfo, Products
+from api.models.users import User
 from api.services.auth import verify_token
 from api.schemas.dashboard import (
     DashboardSummaryResponse,
@@ -96,6 +97,46 @@ def get_dashboard_summary(
         rev, users = revenue_by_date.get(d, (0, 0))
         weekly_chart.append(WeeklyChartEntry(day=DAY_LABELS[d.weekday()], revenue=rev, users=users, load=0))
 
+    # Latest paybill balance from payments
+    last_hp = (
+        _hp_for_client(db.query(HotspotPayments))
+        .filter(HotspotPayments.paybill_balance.isnot(None), HotspotPayments.paybill_balance > 0)
+        .order_by(HotspotPayments.id.desc())
+        .first()
+    )
+    if not last_hp:
+        last_hp = (
+            db.query(HotspotPayments)
+            .filter(HotspotPayments.paybill_balance.isnot(None), HotspotPayments.paybill_balance > 0)
+            .order_by(HotspotPayments.id.desc())
+            .first()
+        )
+    paybill_balance = float(last_hp.paybill_balance) if last_hp else 0.0
+
+    # Latest bulk balance from disbursements
+    client_users = db.query(User).filter(User.client_id == client).all()
+    user_ids = [u.id for u in client_users]
+    last_pd = None
+    if user_ids:
+        last_pd = (
+            db.query(PaymentDisbursement)
+            .filter(
+                PaymentDisbursement.user_id.in_(user_ids),
+                PaymentDisbursement.bulk_balance.isnot(None),
+                PaymentDisbursement.bulk_balance > 0
+            )
+            .order_by(PaymentDisbursement.id.desc())
+            .first()
+        )
+    if not last_pd:
+        last_pd = (
+            db.query(PaymentDisbursement)
+            .filter(PaymentDisbursement.bulk_balance.isnot(None), PaymentDisbursement.bulk_balance > 0)
+            .order_by(PaymentDisbursement.id.desc())
+            .first()
+        )
+    bulk_balance = float(last_pd.bulk_balance) if last_pd else 0.0
+
     return DashboardSummaryResponse(
         message="Dashboard summary fetched successfully",
         metrics=DashboardMetrics(
@@ -106,6 +147,10 @@ def get_dashboard_summary(
             throughputMbps=0.0,
             todaySales=today_sales,
             weeklySales=weekly_sales,
+            paybillBalance=paybill_balance,
+            bulkBalance=bulk_balance,
+            paybill_balance=paybill_balance,
+            bulk_balance=bulk_balance,
         ),
         weeklyChart=weekly_chart,
         liveEvents=[],

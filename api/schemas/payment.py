@@ -61,6 +61,10 @@ class AccountDetailsResponse(BaseModel):
     total_revenue: float = 0.0
     total_withdrawn: float = 0.0
     total_routers: int = 0
+    paybill_balance: float = 0.0
+    paybillBalance: float = 0.0
+    bulk_balance: float = 0.0
+    bulkBalance: float = 0.0
     client_id: Optional[int] = None
     client_name: Optional[str] = None
     email: Optional[str] = None
